@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Chat, Message, APIConfig, APIProvider, AgentState, SearchProvider } from '@/types';
+import { Chat, Message, APIConfig, AgentState } from '@/types';
 
 interface AppState {
   // Chats
@@ -27,6 +27,7 @@ interface AppState {
   addMessage: (chatId: string, message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateLastMessage: (chatId: string, content: string) => void;
   updateChatTitle: (chatId: string, title: string) => void;
+  togglePinChat: (chatId: string) => void;
   
   setApiConfig: (config: Partial<APIConfig>) => void;
   
@@ -54,17 +55,27 @@ export const useStore = create<AppState>()(
       currentChatId: null,
       
       apiConfig: {
-        provider: 'google-gemini' as APIProvider,
+        provider: 'google-gemini',
         azureEndpoint: '',
         azureApiKey: '',
         azureDeploymentName: '',
-        azureApiVersion: '2024-12-01-preview',
+        azureApiVersion: '2025-01-01-preview',
         geminiApiKey: '',
         geminiModel: 'gemini-2.0-flash-exp',
+        claudeApiKey: '',
+        claudeModel: 'claude-sonnet-4-20250514',
+        grokApiKey: '',
+        grokModel: 'grok-3',
+        nanoBananaApiKey: '',
+        nanoBananaModel: 'nano-banana-pro',
         enableAgent: true,
-        searchProvider: 'duckduckgo' as SearchProvider,
+        searchProvider: 'duckduckgo',
         tavilyApiKey: '',
         braveApiKey: '',
+        enableRAG: false,
+        azureSearchEndpoint: '',
+        azureSearchApiKey: '',
+        azureSearchIndexName: '',
       },
       
       isSidebarOpen: true,
@@ -145,6 +156,14 @@ export const useStore = create<AppState>()(
         set((state) => ({
           chats: state.chats.map((chat) =>
             chat.id === chatId ? { ...chat, title } : chat
+          ),
+        }));
+      },
+      
+      togglePinChat: (chatId) => {
+        set((state) => ({
+          chats: state.chats.map((chat) =>
+            chat.id === chatId ? { ...chat, isPinned: !chat.isPinned } : chat
           ),
         }));
       },

@@ -19,8 +19,14 @@ import {
   Clock,
   Eye,
   Wrench,
-  CheckCircle2
+  CheckCircle2,
+  Copy,
+  Check,
+  Mic,
+  MicOff,
+  Volume2
 } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
   web_search: <Search className="w-4 h-4" />,
@@ -36,12 +42,44 @@ const TOOL_LABELS: Record<string, string> = {
   analyze_image: '画像分析',
 };
 
+// コピーボタンコンポーネント
+function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+      title="メッセージをコピー"
+    >
+      {copied ? (
+        <Check className="w-4 h-4 text-green-500" />
+      ) : (
+        <Copy className="w-4 h-4" />
+      )}
+    </button>
+  );
+}
+
 export default function ChatArea() {
   const [input, setInput] = useState('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   
   const {
     chats,
@@ -106,6 +144,46 @@ export default function ChatArea() {
 
   const removeImage = (id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id));
+  };
+
+  // 音声入力機能
+  const startVoiceInput = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const windowWithSpeech = window as any;
+    const SpeechRecognitionAPI = windowWithSpeech.SpeechRecognition || windowWithSpeech.webkitSpeechRecognition;
+    
+    if (!SpeechRecognitionAPI) {
+      alert('お使いのブラウザは音声入力に対応していません');
+      return;
+    }
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((result: any) => result[0].transcript)
+        .join('');
+      setInput(transcript);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -278,16 +356,29 @@ export default function ChatArea() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-800 dark:text-white">AI Chat</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {apiConfig.provider === 'azure-openai' 
                   ? `Azure OpenAI${apiConfig.azureDeploymentName ? ` (${apiConfig.azureDeploymentName})` : ''}`
-                  : `Gemini (${apiConfig.geminiModel || 'gemini-2.0-flash-exp'})`
+                  : apiConfig.provider === 'google-gemini'
+                  ? `Gemini (${apiConfig.geminiModel || 'gemini-2.0-flash-exp'})`
+                  : apiConfig.provider === 'anthropic-claude'
+                  ? `Claude (${apiConfig.claudeModel || 'claude-sonnet-4'})`
+                  : apiConfig.provider === 'xai-grok'
+                  ? `Grok (${apiConfig.grokModel || 'grok-3'})`
+                  : apiConfig.provider === 'nano-banana'
+                  ? `Nano Banana (${apiConfig.nanoBananaModel || 'pro'})`
+                  : 'Unknown'
                 }
               </p>
               {apiConfig.enableAgent && (
                 <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-full">
                   Agent
+                </span>
+              )}
+              {apiConfig.enableRAG && (
+                <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full">
+                  RAG
                 </span>
               )}
             </div>
@@ -393,9 +484,15 @@ export default function ChatArea() {
                     )}
                     
                     {message.content ? (
-                      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                        {message.content}
-                      </div>
+                      message.role === 'assistant' ? (
+                        <div className="text-sm leading-relaxed">
+                          <MarkdownRenderer content={message.content} />
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                          {message.content}
+                        </div>
+                      )
                     ) : (
                       isLoading && idx === currentChat.messages.length - 1 && (
                         <div className="flex items-center gap-2 text-slate-400">
@@ -403,6 +500,33 @@ export default function ChatArea() {
                           <span className="text-sm">考え中...</span>
                         </div>
                       )
+                    )}
+                    
+                    {/* Message Actions */}
+                    {message.content && message.role === 'assistant' && (
+                      <div className="flex items-center gap-1 mt-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <MessageCopyButton text={message.content} />
+                        <button
+                          onClick={() => {
+                            if ('speechSynthesis' in window) {
+                              if (isSpeaking) {
+                                window.speechSynthesis.cancel();
+                                setIsSpeaking(false);
+                              } else {
+                                const utterance = new SpeechSynthesisUtterance(message.content);
+                                utterance.lang = 'ja-JP';
+                                utterance.onend = () => setIsSpeaking(false);
+                                window.speechSynthesis.speak(utterance);
+                                setIsSpeaking(true);
+                              }
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                          title="読み上げ"
+                        >
+                          <Volume2 className={`w-4 h-4 ${isSpeaking ? 'text-purple-500' : ''}`} />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -504,6 +628,22 @@ export default function ChatArea() {
               rows={1}
               className="flex-1 py-3 bg-transparent text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none resize-none max-h-48 disabled:opacity-50"
             />
+            
+            {/* Voice Input Button */}
+            <button
+              type="button"
+              onClick={startVoiceInput}
+              disabled={!isConfigured || isLoading}
+              className={`m-2 p-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                isRecording 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : 'text-slate-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/30'
+              }`}
+              title="音声入力"
+            >
+              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+            
             <button
               type="submit"
               disabled={(!input.trim() && images.length === 0) || isLoading || !isConfigured}
@@ -517,7 +657,7 @@ export default function ChatArea() {
             </button>
           </div>
           <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
-            Enter で送信 / Shift + Enter で改行 / 画像をアップロードして質問もできます
+            Enter で送信 / Shift + Enter で改行 / 🎤 音声入力 / 画像もアップロード可能
           </p>
         </form>
       </div>

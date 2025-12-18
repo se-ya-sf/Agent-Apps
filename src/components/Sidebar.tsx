@@ -8,7 +8,9 @@ import {
   Settings, 
   Menu,
   X,
-  Sparkles
+  Sparkles,
+  Pin,
+  PinOff
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -23,7 +25,18 @@ export default function Sidebar() {
     setCurrentChat,
     toggleSidebar,
     toggleSettings,
+    togglePinChat,
   } = useStore();
+
+  // ピン留めされたチャットを上に表示
+  const sortedChats = [...chats].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+
+  const pinnedChats = sortedChats.filter(c => c.isPinned);
+  const unpinnedChats = sortedChats.filter(c => !c.isPinned);
 
   const handleNewChat = () => {
     createNewChat();
@@ -91,39 +104,115 @@ export default function Sidebar() {
                 <p className="text-xs mt-1">新しいチャットを始めましょう</p>
               </div>
             ) : (
-              chats.map((chat) => (
-                <div
-                  key={chat.id}
-                  className={`
-                    group flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer
-                    transition-all duration-200
-                    ${currentChatId === chat.id 
-                      ? 'bg-purple-600/50 shadow-lg' 
-                      : 'hover:bg-purple-700/30'
-                    }
-                  `}
-                  onClick={() => setCurrentChat(chat.id)}
-                >
-                  <MessageSquare className="w-5 h-5 text-purple-300 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">
-                      {chat.title}
-                    </p>
-                    <p className="text-purple-300/70 text-xs">
-                      {formatDate(chat.updatedAt)}
-                    </p>
+              <>
+                {/* ピン留めされたチャット */}
+                {pinnedChats.length > 0 && (
+                  <div className="mb-2">
+                    <div className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-300/70 font-medium">
+                      <Pin className="w-3 h-3" />
+                      ピン留め
+                    </div>
+                    {pinnedChats.map((chat) => (
+                      <div
+                        key={chat.id}
+                        className={`
+                          group flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer
+                          transition-all duration-200
+                          ${currentChatId === chat.id 
+                            ? 'bg-purple-600/50 shadow-lg' 
+                            : 'hover:bg-purple-700/30'
+                          }
+                        `}
+                        onClick={() => setCurrentChat(chat.id)}
+                      >
+                        <Pin className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium truncate">
+                            {chat.title}
+                          </p>
+                          <p className="text-purple-300/70 text-xs">
+                            {formatDate(chat.updatedAt)}
+                          </p>
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePinChat(chat.id);
+                            }}
+                            className="p-1.5 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/20 rounded-lg"
+                            title="ピン留め解除"
+                          >
+                            <PinOff className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteChat(chat.id);
+                            }}
+                            className="p-1.5 text-purple-300 hover:text-red-400 hover:bg-red-500/20 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteChat(chat.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-purple-300 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-all"
+                )}
+
+                {/* 通常のチャット */}
+                {unpinnedChats.length > 0 && pinnedChats.length > 0 && (
+                  <div className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-300/70 font-medium">
+                    <MessageSquare className="w-3 h-3" />
+                    履歴
+                  </div>
+                )}
+                {unpinnedChats.map((chat) => (
+                  <div
+                    key={chat.id}
+                    className={`
+                      group flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer
+                      transition-all duration-200
+                      ${currentChatId === chat.id 
+                        ? 'bg-purple-600/50 shadow-lg' 
+                        : 'hover:bg-purple-700/30'
+                      }
+                    `}
+                    onClick={() => setCurrentChat(chat.id)}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))
+                    <MessageSquare className="w-5 h-5 text-purple-300 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">
+                        {chat.title}
+                      </p>
+                      <p className="text-purple-300/70 text-xs">
+                        {formatDate(chat.updatedAt)}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePinChat(chat.id);
+                        }}
+                        className="p-1.5 text-purple-300 hover:text-yellow-400 hover:bg-yellow-500/20 rounded-lg"
+                        title="ピン留め"
+                      >
+                        <Pin className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteChat(chat.id);
+                        }}
+                        className="p-1.5 text-purple-300 hover:text-red-400 hover:bg-red-500/20 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </div>

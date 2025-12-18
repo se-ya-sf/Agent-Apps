@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
-import { APIProvider, SearchProvider, GEMINI_MODELS, AZURE_OPENAI_API_VERSIONS } from '@/types';
+import { 
+  APIProvider, 
+  SearchProvider, 
+  GEMINI_MODELS, 
+  AZURE_OPENAI_API_VERSIONS,
+  CLAUDE_MODELS,
+  GROK_MODELS,
+  NANO_BANANA_MODELS
+} from '@/types';
 import { 
   X, 
   Settings, 
@@ -18,7 +26,11 @@ import {
   Calculator,
   Clock,
   Eye,
-  Globe
+  Globe,
+  Database,
+  Sparkles,
+  Brain,
+  Atom
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -140,35 +152,80 @@ export default function SettingsModal() {
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               LLM プロバイダー
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => handleProviderChange('azure-openai')}
                 className={`
-                  flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
+                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
                   ${localConfig.provider === 'azure-openai'
                     ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
                     : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
                   }
                 `}
               >
-                <Cloud className={`w-8 h-8 ${localConfig.provider === 'azure-openai' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className={`text-sm font-medium ${localConfig.provider === 'azure-openai' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                <Cloud className={`w-6 h-6 ${localConfig.provider === 'azure-openai' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-xs font-medium ${localConfig.provider === 'azure-openai' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
                   Azure OpenAI
                 </span>
               </button>
               <button
                 onClick={() => handleProviderChange('google-gemini')}
                 className={`
-                  flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
+                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
                   ${localConfig.provider === 'google-gemini'
                     ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
                     : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
                   }
                 `}
               >
-                <Zap className={`w-8 h-8 ${localConfig.provider === 'google-gemini' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className={`text-sm font-medium ${localConfig.provider === 'google-gemini' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                <Zap className={`w-6 h-6 ${localConfig.provider === 'google-gemini' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-xs font-medium ${localConfig.provider === 'google-gemini' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
                   Google Gemini
+                </span>
+              </button>
+              <button
+                onClick={() => handleProviderChange('anthropic-claude')}
+                className={`
+                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
+                  ${localConfig.provider === 'anthropic-claude'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                  }
+                `}
+              >
+                <Sparkles className={`w-6 h-6 ${localConfig.provider === 'anthropic-claude' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-xs font-medium ${localConfig.provider === 'anthropic-claude' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                  Claude
+                </span>
+              </button>
+              <button
+                onClick={() => handleProviderChange('xai-grok')}
+                className={`
+                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
+                  ${localConfig.provider === 'xai-grok'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                  }
+                `}
+              >
+                <Brain className={`w-6 h-6 ${localConfig.provider === 'xai-grok' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-xs font-medium ${localConfig.provider === 'xai-grok' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                  xAI Grok
+                </span>
+              </button>
+              <button
+                onClick={() => handleProviderChange('nano-banana')}
+                className={`
+                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
+                  ${localConfig.provider === 'nano-banana'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                  }
+                `}
+              >
+                <Atom className={`w-6 h-6 ${localConfig.provider === 'nano-banana' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-xs font-medium ${localConfig.provider === 'nano-banana' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                  Nano Banana
                 </span>
               </button>
             </div>
@@ -289,6 +346,150 @@ export default function SettingsModal() {
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
                 >
                   {GEMINI_MODELS.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label} - {model.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Anthropic Claude Config */}
+          {localConfig.provider === 'anthropic-claude' && (
+            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <ExternalLink className="w-4 h-4" />
+                <a 
+                  href="https://console.anthropic.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-purple-500 underline"
+                >
+                  Anthropic Console で API キーを取得
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Key className="w-4 h-4" />
+                  API キー
+                </label>
+                <input
+                  type="password"
+                  value={localConfig.claudeApiKey || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, claudeApiKey: e.target.value }))}
+                  placeholder="sk-ant-..."
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  モデル
+                </label>
+                <select
+                  value={localConfig.claudeModel || 'claude-sonnet-4-20250514'}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, claudeModel: e.target.value }))}
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
+                >
+                  {CLAUDE_MODELS.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label} - {model.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* xAI Grok Config */}
+          {localConfig.provider === 'xai-grok' && (
+            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <ExternalLink className="w-4 h-4" />
+                <a 
+                  href="https://x.ai/api" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-purple-500 underline"
+                >
+                  xAI で API キーを取得
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Key className="w-4 h-4" />
+                  API キー
+                </label>
+                <input
+                  type="password"
+                  value={localConfig.grokApiKey || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, grokApiKey: e.target.value }))}
+                  placeholder="xai-..."
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  モデル
+                </label>
+                <select
+                  value={localConfig.grokModel || 'grok-3'}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, grokModel: e.target.value }))}
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
+                >
+                  {GROK_MODELS.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label} - {model.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Nano Banana Config */}
+          {localConfig.provider === 'nano-banana' && (
+            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <ExternalLink className="w-4 h-4" />
+                <a 
+                  href="https://www.genspark.ai" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-purple-500 underline"
+                >
+                  Genspark で Nano Banana を利用
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Key className="w-4 h-4" />
+                  API キー
+                </label>
+                <input
+                  type="password"
+                  value={localConfig.nanoBananaApiKey || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, nanoBananaApiKey: e.target.value }))}
+                  placeholder="your-nano-banana-api-key"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  モデル
+                </label>
+                <select
+                  value={localConfig.nanoBananaModel || 'nano-banana-pro'}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, nanoBananaModel: e.target.value }))}
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
+                >
+                  {NANO_BANANA_MODELS.map((model) => (
                     <option key={model.value} value={model.value}>
                       {model.label} - {model.description}
                     </option>
@@ -441,6 +642,114 @@ export default function SettingsModal() {
                   <Eye className="w-4 h-4 text-purple-500" />
                   <span className="text-xs text-slate-600 dark:text-slate-400">画像分析</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* RAG Settings (Azure AI Search) */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              RAG機能 (Azure AI Search)
+            </label>
+            <button
+              onClick={() => setLocalConfig((prev) => ({ ...prev, enableRAG: !prev.enableRAG }))}
+              className={`
+                w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all
+                ${localConfig.enableRAG
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                }
+              `}
+            >
+              <div className={`
+                w-12 h-12 rounded-xl flex items-center justify-center
+                ${localConfig.enableRAG 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                }
+              `}>
+                <Database className="w-6 h-6" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium ${localConfig.enableRAG ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                    RAG機能を有効化
+                  </span>
+                  <span className={`
+                    text-xs px-2 py-0.5 rounded-full
+                    ${localConfig.enableRAG 
+                      ? 'bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300' 
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    }
+                  `}>
+                    {localConfig.enableRAG ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Azure AI Search のインデックスを使用して回答を生成
+                </p>
+              </div>
+            </button>
+          </div>
+
+          {/* RAG Configuration */}
+          {localConfig.enableRAG && (
+            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <ExternalLink className="w-4 h-4" />
+                <a 
+                  href="https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/CognitiveSearch" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-purple-500 underline"
+                >
+                  Azure Portal で AI Search を作成
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Server className="w-4 h-4" />
+                  Search エンドポイント
+                </label>
+                <input
+                  type="text"
+                  value={localConfig.azureSearchEndpoint || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureSearchEndpoint: e.target.value }))}
+                  placeholder="https://your-search.search.windows.net"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Key className="w-4 h-4" />
+                  Search API キー
+                </label>
+                <input
+                  type="password"
+                  value={localConfig.azureSearchApiKey || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureSearchApiKey: e.target.value }))}
+                  placeholder="your-search-api-key"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Database className="w-4 h-4" />
+                  インデックス名
+                </label>
+                <input
+                  type="text"
+                  value={localConfig.azureSearchIndexName || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureSearchIndexName: e.target.value }))}
+                  placeholder="your-index-name"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  事前に Azure AI Search でインデックスを作成しておいてください
+                </p>
               </div>
             </div>
           )}
