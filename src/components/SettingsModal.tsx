@@ -12,7 +12,12 @@ import {
   Zap,
   CheckCircle,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Bot,
+  Search,
+  Calculator,
+  Clock,
+  Eye
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -164,6 +169,74 @@ export default function SettingsModal() {
                 </span>
               </button>
             </div>
+          </div>
+
+          {/* Agent Mode Toggle */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              エージェントモード
+            </label>
+            <button
+              onClick={() => setLocalConfig((prev) => ({ ...prev, enableAgent: !prev.enableAgent }))}
+              className={`
+                w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all
+                ${localConfig.enableAgent
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                }
+              `}
+            >
+              <div className={`
+                w-12 h-12 rounded-xl flex items-center justify-center
+                ${localConfig.enableAgent 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                }
+              `}>
+                <Bot className="w-6 h-6" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium ${localConfig.enableAgent ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                    エージェント機能を有効化
+                  </span>
+                  <span className={`
+                    text-xs px-2 py-0.5 rounded-full
+                    ${localConfig.enableAgent 
+                      ? 'bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300' 
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    }
+                  `}>
+                    {localConfig.enableAgent ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Web検索、計算、画像分析などのツールを使用できます
+                </p>
+              </div>
+            </button>
+            
+            {/* Tool List */}
+            {localConfig.enableAgent && (
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <Search className="w-4 h-4 text-purple-500" />
+                  <span className="text-xs text-slate-600 dark:text-slate-400">Web検索</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <Calculator className="w-4 h-4 text-purple-500" />
+                  <span className="text-xs text-slate-600 dark:text-slate-400">計算機</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <Clock className="w-4 h-4 text-purple-500" />
+                  <span className="text-xs text-slate-600 dark:text-slate-400">現在時刻</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <Eye className="w-4 h-4 text-purple-500" />
+                  <span className="text-xs text-slate-600 dark:text-slate-400">画像分析</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Azure OpenAI Config */}

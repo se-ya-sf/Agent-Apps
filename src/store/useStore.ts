@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Chat, Message, APIConfig, APIProvider } from '@/types';
+import { Chat, Message, APIConfig, APIProvider, AgentState } from '@/types';
 
 interface AppState {
   // Chats
@@ -17,6 +17,9 @@ interface AppState {
   isSettingsOpen: boolean;
   isLoading: boolean;
   
+  // Agent State
+  agentState: AgentState;
+  
   // Actions
   createNewChat: () => string;
   deleteChat: (chatId: string) => void;
@@ -30,29 +33,42 @@ interface AppState {
   toggleSidebar: () => void;
   toggleSettings: () => void;
   setLoading: (loading: boolean) => void;
+  
+  // Agent actions
+  setAgentState: (state: Partial<AgentState>) => void;
+  resetAgentState: () => void;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
+const initialAgentState: AgentState = {
+  isThinking: false,
+  currentTool: undefined,
+  toolResults: [],
+};
+
 export const useStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       chats: [],
       currentChatId: null,
       
       apiConfig: {
-        provider: 'azure-openai' as APIProvider,
+        provider: 'google-gemini' as APIProvider,
         azureEndpoint: '',
         azureApiKey: '',
         azureDeploymentName: '',
         azureApiVersion: '2024-02-15-preview',
         geminiApiKey: '',
         geminiModel: 'gemini-1.5-flash',
+        enableAgent: true,
       },
       
       isSidebarOpen: true,
       isSettingsOpen: false,
       isLoading: false,
+      
+      agentState: initialAgentState,
       
       createNewChat: () => {
         const newChat: Chat = {
@@ -147,9 +163,19 @@ export const useStore = create<AppState>()(
       setLoading: (loading) => {
         set({ isLoading: loading });
       },
+      
+      setAgentState: (newState) => {
+        set((state) => ({
+          agentState: { ...state.agentState, ...newState },
+        }));
+      },
+      
+      resetAgentState: () => {
+        set({ agentState: initialAgentState });
+      },
     }),
     {
-      name: 'rakuten-ai-clone-storage',
+      name: 'rakuten-ai-clone-storage-v2',
       partialize: (state) => ({
         chats: state.chats,
         apiConfig: state.apiConfig,

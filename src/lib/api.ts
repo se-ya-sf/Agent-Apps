@@ -1,28 +1,166 @@
-import { APIConfig, Message } from '@/types';
+import { APIConfig, Message, ToolCall, ImageAttachment } from '@/types';
+import { getOpenAITools, getGeminiTools, executeTool } from './tools';
+
+export interface AgentResponse {
+  content: string;
+  toolCalls?: ToolCall[];
+  finishReason?: string;
+}
+
+export interface SendMessageOptions {
+  onChunk: (chunk: string) => void;
+  onToolCall?: (toolName: string) => void;
+  onToolResult?: (toolName: string, result: string) => void;
+  enableAgent?: boolean;
+  images?: ImageAttachment[];
+}
 
 export async function sendMessage(
   messages: Message[],
   config: APIConfig,
-  onChunk: (chunk: string) => void
-): Promise<string> {
+  options: SendMessageOptions
+): Promise<AgentResponse> {
   if (config.provider === 'azure-openai') {
-    return sendAzureOpenAI(messages, config, onChunk);
+    return sendAzureOpenAI(messages, config, options);
   } else if (config.provider === 'google-gemini') {
-    return sendGoogleGemini(messages, config, onChunk);
+    return sendGoogleGemini(messages, config, options);
   }
   throw new Error('Unknown API provider');
+}
+
+// Agent loop - handles tool calls automatically
+export async function runAgentLoop(
+  messages: Message[],
+  config: APIConfig,
+  options: SendMessageOptions,
+  maxIterations: number = 5
+): Promise<string> {
+  let currentMessages = [...messages];
+  let iterations = 0;
+  let finalContent = '';
+  
+  while (iterations < maxIterations) {
+    iterations++;
+    
+    const response = await sendMessage(currentMessages, config, {
+      ...options,
+      onChunk: iterations === 1 || !response?.toolCalls?.length 
+        ? options.onChunk 
+        : () => {}, // Only stream on first call or final response
+    });
+    
+    // If no tool calls, we're done
+    if (!response.toolCalls || response.toolCalls.length === 0) {
+      finalContent = response.content;
+      break;
+    }
+    
+    // Add assistant message with tool calls
+    currentMessages.push({
+      id: `assistant-${Date.now()}`,
+      role: 'assistant',
+      content: response.content || '',
+      timestamp: new Date(),
+      toolCalls: response.toolCalls,
+    });
+    
+    // Execute each tool and add results
+    for (const toolCall of response.toolCalls) {
+      const toolName = toolCall.function.name;
+      options.onToolCall?.(toolName);
+      
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(toolCall.function.arguments);
+      } catch {
+        args = {};
+      }
+      
+      const result = await executeTool(toolName, args);
+      options.onToolResult?.(toolName, result);
+      
+      // Add tool result message
+      currentMessages.push({
+        id: `tool-${Date.now()}-${toolCall.id}`,
+        role: 'tool',
+        content: result,
+        timestamp: new Date(),
+        toolCallId: toolCall.id,
+      });
+    }
+  }
+  
+  return finalContent;
 }
 
 async function sendAzureOpenAI(
   messages: Message[],
   config: APIConfig,
-  onChunk: (chunk: string) => void
-): Promise<string> {
+  options: SendMessageOptions
+): Promise<AgentResponse> {
   if (!config.azureEndpoint || !config.azureApiKey || !config.azureDeploymentName) {
     throw new Error('Azure OpenAI の設定が不完全です。設定画面で必要な情報を入力してください。');
   }
 
   const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2024-02-15-preview'}`;
+
+  // Convert messages to OpenAI format
+  const formattedMessages = messages.map((m) => {
+    if (m.role === 'tool') {
+      return {
+        role: 'tool' as const,
+        content: m.content,
+        tool_call_id: m.toolCallId,
+      };
+    }
+    
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      return {
+        role: 'assistant' as const,
+        content: m.content || null,
+        tool_calls: m.toolCalls.map(tc => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: {
+            name: tc.function.name,
+            arguments: tc.function.arguments,
+          },
+        })),
+      };
+    }
+    
+    // Handle images for multimodal
+    if (m.images && m.images.length > 0 && m.role === 'user') {
+      return {
+        role: 'user' as const,
+        content: [
+          { type: 'text', text: m.content },
+          ...m.images.map(img => ({
+            type: 'image_url' as const,
+            image_url: { url: img.url },
+          })),
+        ],
+      };
+    }
+    
+    return {
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: m.content,
+    };
+  });
+
+  const requestBody: Record<string, unknown> = {
+    messages: formattedMessages,
+    stream: true,
+    max_tokens: 4096,
+    temperature: 0.7,
+  };
+  
+  // Add tools if agent mode is enabled
+  if (options.enableAgent) {
+    requestBody.tools = getOpenAITools();
+    requestBody.tool_choice = 'auto';
+  }
 
   const response = await fetch(url, {
     method: 'POST',
@@ -30,15 +168,7 @@ async function sendAzureOpenAI(
       'Content-Type': 'application/json',
       'api-key': config.azureApiKey,
     },
-    body: JSON.stringify({
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-      stream: true,
-      max_tokens: 4096,
-      temperature: 0.7,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -46,14 +176,14 @@ async function sendAzureOpenAI(
     throw new Error(`Azure OpenAI API エラー: ${response.status} - ${errorText}`);
   }
 
-  return processStream(response, onChunk, 'azure');
+  return processAzureStream(response, options.onChunk);
 }
 
 async function sendGoogleGemini(
   messages: Message[],
   config: APIConfig,
-  onChunk: (chunk: string) => void
-): Promise<string> {
+  options: SendMessageOptions
+): Promise<AgentResponse> {
   if (!config.geminiApiKey) {
     throw new Error('Google Gemini API キーが設定されていません。設定画面で入力してください。');
   }
@@ -62,30 +192,100 @@ async function sendGoogleGemini(
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${config.geminiApiKey}`;
 
   // Convert messages to Gemini format
-  const contents = messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
+  const contents: Array<{role: string; parts: Array<{text?: string; inlineData?: {mimeType: string; data: string}; functionCall?: {name: string; args: unknown}; functionResponse?: {name: string; response: {result: string}}}>}> = [];
+  
+  for (const m of messages) {
+    if (m.role === 'system') continue;
+    
+    if (m.role === 'tool') {
+      // Find the corresponding tool call
+      const prevMsg = messages.find(msg => 
+        msg.toolCalls?.some(tc => tc.id === m.toolCallId)
+      );
+      const toolCall = prevMsg?.toolCalls?.find(tc => tc.id === m.toolCallId);
+      
+      if (toolCall) {
+        contents.push({
+          role: 'user',
+          parts: [{
+            functionResponse: {
+              name: toolCall.function.name,
+              response: { result: m.content },
+            },
+          }],
+        });
+      }
+      continue;
+    }
+    
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      contents.push({
+        role: 'model',
+        parts: m.toolCalls.map(tc => ({
+          functionCall: {
+            name: tc.function.name,
+            args: JSON.parse(tc.function.arguments || '{}'),
+          },
+        })),
+      });
+      continue;
+    }
+    
+    const parts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
+    
+    if (m.content) {
+      parts.push({ text: m.content });
+    }
+    
+    // Handle images
+    if (m.images && m.images.length > 0) {
+      for (const img of m.images) {
+        if (img.url.startsWith('data:')) {
+          const [header, base64Data] = img.url.split(',');
+          const mimeType = header.match(/data:(.*);/)?.[1] || 'image/jpeg';
+          parts.push({
+            inlineData: {
+              mimeType,
+              data: base64Data,
+            },
+          });
+        }
+      }
+    }
+    
+    if (parts.length > 0) {
+      contents.push({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts,
+      });
+    }
+  }
 
   const systemMessage = messages.find((m) => m.role === 'system');
   
+  const requestBody: Record<string, unknown> = {
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096,
+    },
+  };
+  
+  if (systemMessage) {
+    requestBody.systemInstruction = { parts: [{ text: systemMessage.content }] };
+  }
+  
+  // Add tools if agent mode is enabled
+  if (options.enableAgent) {
+    requestBody.tools = getGeminiTools();
+  }
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      contents,
-      systemInstruction: systemMessage 
-        ? { parts: [{ text: systemMessage.content }] }
-        : undefined,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4096,
-      },
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -93,20 +293,22 @@ async function sendGoogleGemini(
     throw new Error(`Google Gemini API エラー: ${response.status} - ${errorText}`);
   }
 
-  return processStream(response, onChunk, 'gemini');
+  return processGeminiStream(response, options.onChunk);
 }
 
-async function processStream(
+async function processAzureStream(
   response: Response,
-  onChunk: (chunk: string) => void,
-  provider: 'azure' | 'gemini'
-): Promise<string> {
+  onChunk: (chunk: string) => void
+): Promise<AgentResponse> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('ストリームの読み取りに失敗しました');
 
   const decoder = new TextDecoder();
   let fullContent = '';
   let buffer = '';
+  let toolCalls: ToolCall[] = [];
+  const toolCallsMap: Map<number, { id: string; name: string; arguments: string }> = new Map();
+  let finishReason = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -117,41 +319,149 @@ async function processStream(
     buffer = lines.pop() || '';
 
     for (const line of lines) {
-      if (!line.trim()) continue;
-
-      if (provider === 'azure') {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
-          
-          try {
-            const json = JSON.parse(data);
-            const content = json.choices?.[0]?.delta?.content;
-            if (content) {
-              fullContent += content;
-              onChunk(fullContent);
+      if (!line.trim() || !line.startsWith('data: ')) continue;
+      
+      const data = line.slice(6);
+      if (data === '[DONE]') continue;
+      
+      try {
+        const json = JSON.parse(data);
+        const choice = json.choices?.[0];
+        
+        if (choice?.finish_reason) {
+          finishReason = choice.finish_reason;
+        }
+        
+        const delta = choice?.delta;
+        if (!delta) continue;
+        
+        // Handle content
+        if (delta.content) {
+          fullContent += delta.content;
+          onChunk(fullContent);
+        }
+        
+        // Handle tool calls
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const index = tc.index;
+            if (!toolCallsMap.has(index)) {
+              toolCallsMap.set(index, {
+                id: tc.id || '',
+                name: tc.function?.name || '',
+                arguments: '',
+              });
             }
-          } catch {
-            // Skip invalid JSON
+            
+            const existing = toolCallsMap.get(index)!;
+            if (tc.id) existing.id = tc.id;
+            if (tc.function?.name) existing.name = tc.function.name;
+            if (tc.function?.arguments) existing.arguments += tc.function.arguments;
           }
         }
-      } else if (provider === 'gemini') {
-        try {
-          // Gemini returns JSON array for streaming
-          const json = JSON.parse(line);
-          const content = json.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (content) {
-            fullContent += content;
-            onChunk(fullContent);
-          }
-        } catch {
-          // Skip invalid JSON
-        }
+      } catch {
+        // Skip invalid JSON
       }
     }
   }
 
-  return fullContent;
+  // Convert tool calls map to array
+  if (toolCallsMap.size > 0) {
+    toolCalls = Array.from(toolCallsMap.values()).map(tc => ({
+      id: tc.id,
+      type: 'function' as const,
+      function: {
+        name: tc.name,
+        arguments: tc.arguments,
+      },
+    }));
+  }
+
+  return { content: fullContent, toolCalls, finishReason };
+}
+
+async function processGeminiStream(
+  response: Response,
+  onChunk: (chunk: string) => void
+): Promise<AgentResponse> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('ストリームの読み取りに失敗しました');
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+  let toolCalls: ToolCall[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    
+    // Gemini streams JSON objects, try to parse complete objects
+    try {
+      // Handle array format from Gemini
+      if (buffer.trim().startsWith('[')) {
+        const jsonArray = JSON.parse(buffer);
+        for (const item of jsonArray) {
+          const candidate = item.candidates?.[0];
+          if (candidate?.content?.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.text) {
+                fullContent = part.text;
+                onChunk(fullContent);
+              }
+              if (part.functionCall) {
+                toolCalls.push({
+                  id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  type: 'function',
+                  function: {
+                    name: part.functionCall.name,
+                    arguments: JSON.stringify(part.functionCall.args || {}),
+                  },
+                });
+              }
+            }
+          }
+        }
+        buffer = '';
+      }
+    } catch {
+      // Continue accumulating buffer
+    }
+  }
+
+  // Final parse attempt
+  if (buffer.trim()) {
+    try {
+      const jsonArray = JSON.parse(buffer);
+      for (const item of jsonArray) {
+        const candidate = item.candidates?.[0];
+        if (candidate?.content?.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.text && !fullContent) {
+              fullContent = part.text;
+              onChunk(fullContent);
+            }
+            if (part.functionCall) {
+              toolCalls.push({
+                id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                type: 'function',
+                function: {
+                  name: part.functionCall.name,
+                  arguments: JSON.stringify(part.functionCall.args || {}),
+                },
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return { content: fullContent, toolCalls };
 }
 
 export function isApiConfigured(config: APIConfig): boolean {
