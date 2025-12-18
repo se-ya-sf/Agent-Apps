@@ -1,0 +1,333 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useStore } from '@/store/useStore';
+import { APIProvider } from '@/types';
+import { 
+  X, 
+  Settings, 
+  Cloud, 
+  Key,
+  Server,
+  Zap,
+  CheckCircle,
+  AlertCircle,
+  ExternalLink
+} from 'lucide-react';
+
+export default function SettingsModal() {
+  const { isSettingsOpen, toggleSettings, apiConfig, setApiConfig } = useStore();
+  
+  const [localConfig, setLocalConfig] = useState(apiConfig);
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
+
+  useEffect(() => {
+    setLocalConfig(apiConfig);
+  }, [apiConfig, isSettingsOpen]);
+
+  const handleProviderChange = (provider: APIProvider) => {
+    setLocalConfig((prev) => ({ ...prev, provider }));
+    setTestStatus('idle');
+    setTestMessage('');
+  };
+
+  const handleSave = () => {
+    setApiConfig(localConfig);
+    toggleSettings();
+  };
+
+  const handleTest = async () => {
+    setTestStatus('testing');
+    setTestMessage('');
+
+    try {
+      if (localConfig.provider === 'azure-openai') {
+        if (!localConfig.azureEndpoint || !localConfig.azureApiKey || !localConfig.azureDeploymentName) {
+          throw new Error('必須項目を入力してください');
+        }
+
+        const url = `${localConfig.azureEndpoint}/openai/deployments/${localConfig.azureDeploymentName}/chat/completions?api-version=${localConfig.azureApiVersion || '2024-02-15-preview'}`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-key': localConfig.azureApiKey,
+          },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: 'Hello' }],
+            max_tokens: 10,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status}`);
+        }
+
+        setTestStatus('success');
+        setTestMessage('接続成功!');
+      } else if (localConfig.provider === 'google-gemini') {
+        if (!localConfig.geminiApiKey) {
+          throw new Error('API キーを入力してください');
+        }
+
+        const model = localConfig.geminiModel || 'gemini-1.5-flash';
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${localConfig.geminiApiKey}`;
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Hello' }] }],
+            generationConfig: { maxOutputTokens: 10 },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status}`);
+        }
+
+        setTestStatus('success');
+        setTestMessage('接続成功!');
+      }
+    } catch (error) {
+      setTestStatus('error');
+      setTestMessage(error instanceof Error ? error.message : '接続に失敗しました');
+    }
+  };
+
+  if (!isSettingsOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={toggleSettings}
+      />
+
+      {/* Modal */}
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-500">
+          <div className="flex items-center gap-3">
+            <Settings className="w-6 h-6 text-white" />
+            <h2 className="text-xl font-bold text-white">API 設定</h2>
+          </div>
+          <button
+            onClick={toggleSettings}
+            className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+          {/* Provider Selection */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              API プロバイダー
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => handleProviderChange('azure-openai')}
+                className={`
+                  flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
+                  ${localConfig.provider === 'azure-openai'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                  }
+                `}
+              >
+                <Cloud className={`w-8 h-8 ${localConfig.provider === 'azure-openai' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-sm font-medium ${localConfig.provider === 'azure-openai' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                  Azure OpenAI
+                </span>
+              </button>
+              <button
+                onClick={() => handleProviderChange('google-gemini')}
+                className={`
+                  flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
+                  ${localConfig.provider === 'google-gemini'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                  }
+                `}
+              >
+                <Zap className={`w-8 h-8 ${localConfig.provider === 'google-gemini' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-sm font-medium ${localConfig.provider === 'google-gemini' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                  Google Gemini
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Azure OpenAI Config */}
+          {localConfig.provider === 'azure-openai' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <ExternalLink className="w-4 h-4" />
+                <a 
+                  href="https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-purple-500 underline"
+                >
+                  Azure Portal で OpenAI を作成
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Server className="w-4 h-4" />
+                  エンドポイント URL
+                </label>
+                <input
+                  type="text"
+                  value={localConfig.azureEndpoint || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureEndpoint: e.target.value }))}
+                  placeholder="https://your-resource.openai.azure.com"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Key className="w-4 h-4" />
+                  API キー
+                </label>
+                <input
+                  type="password"
+                  value={localConfig.azureApiKey || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureApiKey: e.target.value }))}
+                  placeholder="your-api-key"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  デプロイメント名
+                </label>
+                <input
+                  type="text"
+                  value={localConfig.azureDeploymentName || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureDeploymentName: e.target.value }))}
+                  placeholder="gpt-4o"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  API バージョン
+                </label>
+                <select
+                  value={localConfig.azureApiVersion || '2024-02-15-preview'}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureApiVersion: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
+                >
+                  <option value="2024-02-15-preview">2024-02-15-preview</option>
+                  <option value="2024-05-01-preview">2024-05-01-preview</option>
+                  <option value="2024-08-01-preview">2024-08-01-preview</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Google Gemini Config */}
+          {localConfig.provider === 'google-gemini' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <ExternalLink className="w-4 h-4" />
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-purple-500 underline"
+                >
+                  Google AI Studio で API キーを取得
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Key className="w-4 h-4" />
+                  API キー
+                </label>
+                <input
+                  type="password"
+                  value={localConfig.geminiApiKey || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, geminiApiKey: e.target.value }))}
+                  placeholder="your-gemini-api-key"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  モデル
+                </label>
+                <select
+                  value={localConfig.geminiModel || 'gemini-1.5-flash'}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, geminiModel: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
+                >
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (高速)</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (高性能)</option>
+                  <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (実験版)</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Test Status */}
+          {testStatus !== 'idle' && (
+            <div className={`
+              flex items-center gap-2 p-3 rounded-lg
+              ${testStatus === 'testing' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : ''}
+              ${testStatus === 'success' ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400' : ''}
+              ${testStatus === 'error' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : ''}
+            `}>
+              {testStatus === 'testing' && (
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              )}
+              {testStatus === 'success' && <CheckCircle className="w-4 h-4" />}
+              {testStatus === 'error' && <AlertCircle className="w-4 h-4" />}
+              <span className="text-sm font-medium">{testMessage || 'テスト中...'}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
+          <button
+            onClick={handleTest}
+            disabled={testStatus === 'testing'}
+            className="px-4 py-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            接続テスト
+          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={toggleSettings}
+              className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg font-medium transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
