@@ -1,4 +1,4 @@
-import { ToolDefinition, SearchResult } from '@/types';
+import { ToolDefinition, SearchResult, SearchProvider } from '@/types';
 
 // Tool definitions for function calling
 export const AVAILABLE_TOOLS: ToolDefinition[] = [
@@ -64,16 +64,114 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
 ];
 
-// Tool execution functions
-export async function executeWebSearch(query: string): Promise<SearchResult[]> {
+// Search configuration
+interface SearchConfig {
+  provider: SearchProvider;
+  tavilyApiKey?: string;
+  braveApiKey?: string;
+}
+
+// Tavily Search API (recommended for AI agents)
+async function searchWithTavily(query: string, apiKey: string): Promise<SearchResult[]> {
   try {
-    // Using DuckDuckGo instant answer API (free, no API key needed)
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: query,
+        search_depth: 'basic',
+        include_answer: true,
+        include_raw_content: false,
+        max_results: 5,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Tavily API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    const results: SearchResult[] = [];
+
+    // Include AI-generated answer if available
+    if (data.answer) {
+      results.push({
+        title: 'AI Summary',
+        url: '',
+        snippet: data.answer,
+      });
+    }
+
+    // Add search results
+    if (data.results && Array.isArray(data.results)) {
+      for (const item of data.results) {
+        results.push({
+          title: item.title || 'Result',
+          url: item.url || '',
+          snippet: item.content || '',
+        });
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Tavily search error:', error);
+    throw error;
+  }
+}
+
+// Brave Search API
+async function searchWithBrave(query: string, apiKey: string): Promise<SearchResult[]> {
+  try {
+    const response = await fetch(
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip',
+          'X-Subscription-Token': apiKey,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Brave Search API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    const results: SearchResult[] = [];
+
+    if (data.web?.results && Array.isArray(data.web.results)) {
+      for (const item of data.web.results) {
+        results.push({
+          title: item.title || 'Result',
+          url: item.url || '',
+          snippet: item.description || '',
+        });
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Brave search error:', error);
+    throw error;
+  }
+}
+
+// DuckDuckGo (fallback, no API key needed but limited)
+async function searchWithDuckDuckGo(query: string): Promise<SearchResult[]> {
+  try {
     const response = await fetch(
       `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
     );
     
     if (!response.ok) {
-      throw new Error('Search request failed');
+      throw new Error('DuckDuckGo request failed');
     }
     
     const data = await response.json();
@@ -101,23 +199,70 @@ export async function executeWebSearch(query: string): Promise<SearchResult[]> {
       }
     }
     
-    // If no results from DuckDuckGo, use a fallback search
+    return results;
+  } catch (error) {
+    console.error('DuckDuckGo search error:', error);
+    throw error;
+  }
+}
+
+// Main search function
+export async function executeWebSearch(
+  query: string, 
+  config?: SearchConfig
+): Promise<SearchResult[]> {
+  const provider = config?.provider || 'duckduckgo';
+  
+  try {
+    let results: SearchResult[] = [];
+    
+    switch (provider) {
+      case 'tavily':
+        if (!config?.tavilyApiKey) {
+          throw new Error('Tavily API key is required');
+        }
+        results = await searchWithTavily(query, config.tavilyApiKey);
+        break;
+        
+      case 'brave':
+        if (!config?.braveApiKey) {
+          throw new Error('Brave Search API key is required');
+        }
+        results = await searchWithBrave(query, config.braveApiKey);
+        break;
+        
+      case 'duckduckgo':
+      default:
+        results = await searchWithDuckDuckGo(query);
+        break;
+    }
+    
     if (results.length === 0) {
-      // Fallback: Return a message suggesting the search
       return [{
-        title: `Search: ${query}`,
+        title: `検索: ${query}`,
         url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
-        snippet: `No instant results found. You can search directly at: https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+        snippet: `検索結果が見つかりませんでした。直接検索してみてください。`,
       }];
     }
     
     return results;
   } catch (error) {
     console.error('Search error:', error);
+    
+    // Fallback to DuckDuckGo if other providers fail
+    if (provider !== 'duckduckgo') {
+      console.log('Falling back to DuckDuckGo...');
+      try {
+        return await searchWithDuckDuckGo(query);
+      } catch {
+        // Final fallback
+      }
+    }
+    
     return [{
-      title: 'Search Error',
+      title: '検索エラー',
       url: '',
-      snippet: `Failed to search: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      snippet: `検索に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`,
     }];
   }
 }
@@ -144,11 +289,6 @@ export function getCurrentTime(timezone: string = 'Asia/Tokyo'): string {
 
 export function calculate(expression: string): string {
   try {
-    // Sanitize the expression to prevent code injection
-    const sanitized = expression
-      .replace(/[^0-9+\-*/().%\s^]/gi, '')
-      .replace(/\^/g, '**');
-    
     // Add Math functions support
     const withMathFuncs = expression
       .replace(/sqrt\(/gi, 'Math.sqrt(')
@@ -160,7 +300,13 @@ export function calculate(expression: string): string {
       .replace(/abs\(/gi, 'Math.abs(')
       .replace(/pow\(/gi, 'Math.pow(')
       .replace(/pi/gi, 'Math.PI')
-      .replace(/e(?![a-z])/gi, 'Math.E');
+      .replace(/e(?![a-z])/gi, 'Math.E')
+      .replace(/\^/g, '**');
+    
+    // Validate expression (allow only safe characters)
+    if (!/^[0-9+\-*/().%\s,Math.sqrtcoinabpwPIE]+$/.test(withMathFuncs.replace(/Math\./g, ''))) {
+      throw new Error('Invalid characters in expression');
+    }
     
     // Use Function constructor for safer eval
     const result = new Function(`return ${withMathFuncs}`)();
@@ -179,11 +325,12 @@ export function calculate(expression: string): string {
 // Execute a tool by name
 export async function executeTool(
   toolName: string, 
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  searchConfig?: SearchConfig
 ): Promise<string> {
   switch (toolName) {
     case 'web_search': {
-      const results = await executeWebSearch(args.query as string);
+      const results = await executeWebSearch(args.query as string, searchConfig);
       if (results.length === 0) {
         return 'No search results found.';
       }

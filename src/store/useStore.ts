@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Chat, Message, APIConfig, APIProvider, AgentState } from '@/types';
+import { Chat, Message, APIConfig, APIProvider, AgentState, SearchProvider } from '@/types';
 
 interface AppState {
   // Chats
@@ -58,10 +58,13 @@ export const useStore = create<AppState>()(
         azureEndpoint: '',
         azureApiKey: '',
         azureDeploymentName: '',
-        azureApiVersion: '2024-02-15-preview',
+        azureApiVersion: '2024-12-01-preview',
         geminiApiKey: '',
-        geminiModel: 'gemini-1.5-flash',
+        geminiModel: 'gemini-2.0-flash-exp',
         enableAgent: true,
+        searchProvider: 'duckduckgo' as SearchProvider,
+        tavilyApiKey: '',
+        braveApiKey: '',
       },
       
       isSidebarOpen: true,
@@ -175,7 +178,7 @@ export const useStore = create<AppState>()(
       },
     }),
     {
-      name: 'rakuten-ai-clone-storage-v2',
+      name: 'ai-chat-agent-storage-v3',
       partialize: (state) => ({
         chats: state.chats,
         apiConfig: state.apiConfig,

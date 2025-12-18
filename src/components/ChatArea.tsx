@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { sendMessage, isApiConfigured } from '@/lib/api';
 import { executeTool, AVAILABLE_TOOLS } from '@/lib/tools';
-import { ImageAttachment, ToolCall } from '@/types';
+import { ImageAttachment } from '@/types';
 import { 
   Send, 
   Loader2, 
@@ -203,7 +203,13 @@ export default function ChatArea() {
             args = {};
           }
 
-          const result = await executeTool(toolName, args);
+          // Pass search config to executeTool
+          const searchConfig = {
+            provider: apiConfig.searchProvider || 'duckduckgo',
+            tavilyApiKey: apiConfig.tavilyApiKey,
+            braveApiKey: apiConfig.braveApiKey,
+          };
+          const result = await executeTool(toolName, args, searchConfig);
           toolResults.push({ toolCallId: toolCall.id, result });
           
           setAgentState({ 
@@ -274,7 +280,10 @@ export default function ChatArea() {
             <h1 className="text-lg font-bold text-slate-800 dark:text-white">AI Chat</h1>
             <div className="flex items-center gap-2">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {apiConfig.provider === 'azure-openai' ? 'Azure OpenAI' : 'Google Gemini'}
+                {apiConfig.provider === 'azure-openai' 
+                  ? `Azure OpenAI${apiConfig.azureDeploymentName ? ` (${apiConfig.azureDeploymentName})` : ''}`
+                  : `Gemini (${apiConfig.geminiModel || 'gemini-2.0-flash-exp'})`
+                }
               </p>
               {apiConfig.enableAgent && (
                 <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-full">
