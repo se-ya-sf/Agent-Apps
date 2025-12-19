@@ -128,6 +128,18 @@ export const isGPT5Model = (deploymentName?: string): boolean => {
   return name.includes('gpt-5') || name.includes('o1') || name.includes('o3');
 };
 
+// 新しいAPIバージョン（2025年以降）かどうかを判定
+// 2025年以降のAPIでは max_completion_tokens を使用
+export const useMaxCompletionTokens = (apiVersion?: string, deploymentName?: string): boolean => {
+  // GPT-5系モデルは必ず max_completion_tokens を使用
+  if (isGPT5Model(deploymentName)) return true;
+  
+  // 2025年以降のAPIバージョンは max_completion_tokens を使用
+  if (apiVersion && apiVersion >= '2025-01-01') return true;
+  
+  return false;
+};
+
 // Azure OpenAI v1 API (2025年8月以降)
 export const AZURE_OPENAI_V1_ENABLED = false; // v1 API有効化フラグ
 
