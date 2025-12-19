@@ -65,7 +65,7 @@ export default function SettingsModal() {
           throw new Error('必須項目を入力してください');
         }
 
-        const url = `${localConfig.azureEndpoint}/openai/deployments/${localConfig.azureDeploymentName}/chat/completions?api-version=${localConfig.azureApiVersion || '2024-12-01-preview'}`;
+        const url = `${localConfig.azureEndpoint}/openai/deployments/${localConfig.azureDeploymentName}/chat/completions?api-version=${localConfig.azureApiVersion || '2025-04-01-preview'}`;
         
         const response = await fetch(url, {
           method: 'POST',
@@ -295,7 +295,7 @@ export default function SettingsModal() {
                   API バージョン
                 </label>
                 <select
-                  value={localConfig.azureApiVersion || '2024-12-01-preview'}
+                  value={localConfig.azureApiVersion || '2025-04-01-preview'}
                   onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureApiVersion: e.target.value }))}
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
                 >

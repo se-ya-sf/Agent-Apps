@@ -1,4 +1,4 @@
-import { APIConfig, Message, ToolCall, ImageAttachment } from '@/types';
+import { APIConfig, Message, ToolCall, ImageAttachment, isGPT5Model } from '@/types';
 import { getOpenAITools, getGeminiTools, executeTool } from './tools';
 
 export interface AgentResponse {
@@ -231,12 +231,21 @@ async function sendAzureOpenAI(
     }
   }
 
+  // GPT-5系モデルかどうかで使用するパラメータを変更
+  const isGPT5 = isGPT5Model(config.azureDeploymentName);
+  
   const requestBody: Record<string, unknown> = {
     messages: formattedMessages,
     stream: true,
-    max_tokens: 4096,
     temperature: 0.7,
   };
+
+  // GPT-5系は max_completion_tokens、それ以外は max_tokens
+  if (isGPT5) {
+    requestBody.max_completion_tokens = 16384; // GPT-5系は大きめに設定
+  } else {
+    requestBody.max_tokens = 4096;
+  }
   
   // Add tools if agent mode is enabled
   if (options.enableAgent) {

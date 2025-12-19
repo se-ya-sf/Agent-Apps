@@ -113,13 +113,20 @@ export interface AgentState {
 
 // Azure OpenAI Model Presets (2025年12月現在の最新)
 export const AZURE_OPENAI_API_VERSIONS = [
-  '2025-01-01-preview',  // 最新 (GPT-5対応)
+  '2025-04-01-preview',  // 最新 (GPT-5/5.1/5.2対応・必須)
+  '2025-03-01-preview',  // GPT-5対応
+  '2025-01-01-preview',  // GPT-5対応
   '2024-12-01-preview',  // GPT-4o Audio対応
-  '2024-10-21',          // GA版
+  '2024-10-21',          // GA版 (GPT-4o等)
   '2024-08-01-preview',  // Structured Outputs
-  '2024-05-01-preview',
-  '2024-02-15-preview',
 ] as const;
+
+// GPT-5系モデルかどうかを判定するヘルパー
+export const isGPT5Model = (deploymentName?: string): boolean => {
+  if (!deploymentName) return false;
+  const name = deploymentName.toLowerCase();
+  return name.includes('gpt-5') || name.includes('o1') || name.includes('o3');
+};
 
 // Azure OpenAI v1 API (2025年8月以降)
 export const AZURE_OPENAI_V1_ENABLED = false; // v1 API有効化フラグ

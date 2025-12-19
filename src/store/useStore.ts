@@ -59,7 +59,7 @@ export const useStore = create<AppState>()(
         azureEndpoint: '',
         azureApiKey: '',
         azureDeploymentName: '',
-        azureApiVersion: '2025-01-01-preview',
+        azureApiVersion: '2025-04-01-preview',
         geminiApiKey: '',
         geminiModel: 'gemini-2.0-flash-exp',
         claudeApiKey: '',
