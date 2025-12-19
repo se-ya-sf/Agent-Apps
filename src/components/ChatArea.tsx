@@ -362,12 +362,6 @@ export default function ChatArea() {
                   ? `Azure OpenAI${apiConfig.azureDeploymentName ? ` (${apiConfig.azureDeploymentName})` : ''}`
                   : apiConfig.provider === 'google-gemini'
                   ? `Gemini (${apiConfig.geminiModel || 'gemini-2.0-flash-exp'})`
-                  : apiConfig.provider === 'anthropic-claude'
-                  ? `Claude (${apiConfig.claudeModel || 'claude-sonnet-4'})`
-                  : apiConfig.provider === 'xai-grok'
-                  ? `Grok (${apiConfig.grokModel || 'grok-3'})`
-                  : apiConfig.provider === 'nano-banana'
-                  ? `Nano Banana (${apiConfig.nanoBananaModel || 'pro'})`
                   : 'Unknown'
                 }
               </p>

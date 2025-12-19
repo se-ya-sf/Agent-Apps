@@ -25,12 +25,6 @@ export async function sendMessage(
       return sendAzureOpenAI(messages, config, options);
     case 'google-gemini':
       return sendGoogleGemini(messages, config, options);
-    case 'anthropic-claude':
-      return sendClaude(messages, config, options);
-    case 'xai-grok':
-      return sendGrok(messages, config, options);
-    case 'nano-banana':
-      return sendNanoBanana(messages, config, options);
     default:
       throw new Error('Unknown API provider');
   }
@@ -160,7 +154,7 @@ async function sendAzureOpenAI(
     throw new Error('Azure OpenAI の設定が不完全です。設定画面で必要な情報を入力してください。');
   }
 
-  const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2025-01-01-preview'}`;
+  const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2025-04-01-preview'}`;
 
   // RAGが有効な場合、最後のユーザーメッセージでインデックス検索
   let ragContext = '';
@@ -487,7 +481,7 @@ async function processGeminiStream(
   const decoder = new TextDecoder();
   let fullContent = '';
   let buffer = '';
-  let toolCalls: ToolCall[] = [];
+  const toolCalls: ToolCall[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -561,275 +555,12 @@ async function processGeminiStream(
   return { content: fullContent, toolCalls };
 }
 
-// Claude API
-async function sendClaude(
-  messages: Message[],
-  config: APIConfig,
-  options: SendMessageOptions
-): Promise<AgentResponse> {
-  if (!config.claudeApiKey) {
-    throw new Error('Claude API キーが設定されていません。設定画面で入力してください。');
-  }
-
-  const model = config.claudeModel || 'claude-sonnet-4-20250514';
-  const url = 'https://api.anthropic.com/v1/messages';
-
-  // Convert messages to Claude format
-  const systemMessage = messages.find(m => m.role === 'system');
-  const chatMessages = messages
-    .filter(m => m.role !== 'system' && m.role !== 'tool')
-    .map(m => ({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.images && m.images.length > 0 
-        ? [
-            { type: 'text', text: m.content },
-            ...m.images.map(img => ({
-              type: 'image' as const,
-              source: {
-                type: 'base64' as const,
-                media_type: img.mimeType,
-                data: img.url.split(',')[1] || img.url,
-              },
-            })),
-          ]
-        : m.content,
-    }));
-
-  const requestBody: Record<string, unknown> = {
-    model,
-    messages: chatMessages,
-    max_tokens: 4096,
-    stream: true,
-  };
-
-  if (systemMessage) {
-    requestBody.system = systemMessage.content;
-  }
-
-  // Add tools if agent mode is enabled
-  if (options.enableAgent) {
-    requestBody.tools = getOpenAITools().map(t => ({
-      name: t.function.name,
-      description: t.function.description,
-      input_schema: t.function.parameters,
-    }));
-  }
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': config.claudeApiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Claude API エラー: ${response.status} - ${errorText}`);
-  }
-
-  return processClaudeStream(response, options.onChunk);
-}
-
-async function processClaudeStream(
-  response: Response,
-  onChunk: (chunk: string) => void
-): Promise<AgentResponse> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('ストリームの読み取りに失敗しました');
-
-  const decoder = new TextDecoder();
-  let fullContent = '';
-  let buffer = '';
-  const toolCalls: ToolCall[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.trim() || !line.startsWith('data: ')) continue;
-      const data = line.slice(6);
-      if (data === '[DONE]') continue;
-
-      try {
-        const json = JSON.parse(data);
-        if (json.type === 'content_block_delta' && json.delta?.text) {
-          fullContent += json.delta.text;
-          onChunk(fullContent);
-        }
-        if (json.type === 'content_block_start' && json.content_block?.type === 'tool_use') {
-          toolCalls.push({
-            id: json.content_block.id,
-            type: 'function',
-            function: {
-              name: json.content_block.name,
-              arguments: '',
-            },
-          });
-        }
-        if (json.type === 'content_block_delta' && json.delta?.partial_json) {
-          if (toolCalls.length > 0) {
-            toolCalls[toolCalls.length - 1].function.arguments += json.delta.partial_json;
-          }
-        }
-      } catch {
-        // Skip invalid JSON
-      }
-    }
-  }
-
-  return { content: fullContent, toolCalls };
-}
-
-// xAI Grok API (OpenAI互換)
-async function sendGrok(
-  messages: Message[],
-  config: APIConfig,
-  options: SendMessageOptions
-): Promise<AgentResponse> {
-  if (!config.grokApiKey) {
-    throw new Error('Grok API キーが設定されていません。設定画面で入力してください。');
-  }
-
-  const model = config.grokModel || 'grok-3';
-  const url = 'https://api.x.ai/v1/chat/completions';
-
-  // Convert messages to OpenAI format (Grok uses OpenAI-compatible API)
-  const formattedMessages = messages.map((m) => {
-    if (m.role === 'tool') {
-      return {
-        role: 'tool' as const,
-        content: m.content,
-        tool_call_id: m.toolCallId,
-      };
-    }
-    
-    if (m.toolCalls && m.toolCalls.length > 0) {
-      return {
-        role: 'assistant' as const,
-        content: m.content || null,
-        tool_calls: m.toolCalls.map(tc => ({
-          id: tc.id,
-          type: 'function' as const,
-          function: {
-            name: tc.function.name,
-            arguments: tc.function.arguments,
-          },
-        })),
-      };
-    }
-    
-    if (m.images && m.images.length > 0 && m.role === 'user') {
-      return {
-        role: 'user' as const,
-        content: [
-          { type: 'text', text: m.content },
-          ...m.images.map(img => ({
-            type: 'image_url' as const,
-            image_url: { url: img.url },
-          })),
-        ],
-      };
-    }
-    
-    return {
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    };
-  });
-
-  const requestBody: Record<string, unknown> = {
-    model,
-    messages: formattedMessages,
-    stream: true,
-    max_tokens: 4096,
-    temperature: 0.7,
-  };
-  
-  if (options.enableAgent) {
-    requestBody.tools = getOpenAITools();
-    requestBody.tool_choice = 'auto';
-  }
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.grokApiKey}`,
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Grok API エラー: ${response.status} - ${errorText}`);
-  }
-
-  return processAzureStream(response, options.onChunk);
-}
-
-// Nano Banana API (プレースホルダー実装)
-async function sendNanoBanana(
-  messages: Message[],
-  config: APIConfig,
-  options: SendMessageOptions
-): Promise<AgentResponse> {
-  if (!config.nanoBananaApiKey) {
-    throw new Error('Nano Banana API キーが設定されていません。設定画面で入力してください。');
-  }
-
-  // Nano Banana は主に画像生成モデルのため、チャットは限定的
-  // 必要に応じてエンドポイントを変更
-  const url = 'https://api.genspark.ai/v1/chat/completions';
-  
-  const formattedMessages = messages.map((m) => ({
-    role: m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }));
-
-  const requestBody = {
-    model: config.nanoBananaModel || 'nano-banana-pro',
-    messages: formattedMessages,
-    stream: true,
-    max_tokens: 4096,
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.nanoBananaApiKey}`,
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Nano Banana API エラー: ${response.status} - ${errorText}`);
-  }
-
-  return processAzureStream(response, options.onChunk);
-}
-
 export function isApiConfigured(config: APIConfig): boolean {
   switch (config.provider) {
     case 'azure-openai':
       return !!(config.azureEndpoint && config.azureApiKey && config.azureDeploymentName);
     case 'google-gemini':
       return !!config.geminiApiKey;
-    case 'anthropic-claude':
-      return !!config.claudeApiKey;
-    case 'xai-grok':
-      return !!config.grokApiKey;
-    case 'nano-banana':
-      return !!config.nanoBananaApiKey;
     default:
       return false;
   }

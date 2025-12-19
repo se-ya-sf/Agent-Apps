@@ -55,23 +55,22 @@ export const useStore = create<AppState>()(
       currentChatId: null,
       
       apiConfig: {
-        provider: 'google-gemini',
+        provider: 'azure-openai',
+        // Azure OpenAI (GPT-4o, GPT-5, Claude, Grok 等全てデプロイメント名で指定)
         azureEndpoint: '',
         azureApiKey: '',
         azureDeploymentName: '',
         azureApiVersion: '2025-04-01-preview',
+        // Google Gemini
         geminiApiKey: '',
         geminiModel: 'gemini-2.0-flash-exp',
-        claudeApiKey: '',
-        claudeModel: 'claude-sonnet-4-20250514',
-        grokApiKey: '',
-        grokModel: 'grok-3',
-        nanoBananaApiKey: '',
-        nanoBananaModel: 'nano-banana-pro',
+        // Agent settings
         enableAgent: true,
+        // Search settings
         searchProvider: 'duckduckgo',
         tavilyApiKey: '',
         braveApiKey: '',
+        // RAG settings
         enableRAG: false,
         azureSearchEndpoint: '',
         azureSearchApiKey: '',

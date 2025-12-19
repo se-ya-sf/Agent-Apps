@@ -7,9 +7,7 @@ import {
   SearchProvider, 
   GEMINI_MODELS, 
   AZURE_OPENAI_API_VERSIONS,
-  CLAUDE_MODELS,
-  GROK_MODELS,
-  NANO_BANANA_MODELS,
+  AZURE_DEPLOYMENT_EXAMPLES,
   isGPT5Model
 } from '@/types';
 import { 
@@ -29,9 +27,7 @@ import {
   Eye,
   Globe,
   Database,
-  Sparkles,
-  Brain,
-  Atom
+  Info
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -160,85 +156,46 @@ export default function SettingsModal() {
 
         {/* Content */}
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-          {/* Provider Selection */}
+          {/* Provider Selection - 2つに簡素化 */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
               LLM プロバイダー
             </label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleProviderChange('azure-openai')}
                 className={`
-                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
+                  flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
                   ${localConfig.provider === 'azure-openai'
                     ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
                     : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
                   }
                 `}
               >
-                <Cloud className={`w-6 h-6 ${localConfig.provider === 'azure-openai' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className={`text-xs font-medium ${localConfig.provider === 'azure-openai' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                <Cloud className={`w-8 h-8 ${localConfig.provider === 'azure-openai' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-sm font-medium ${localConfig.provider === 'azure-openai' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
                   Azure OpenAI
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                  GPT-4o / GPT-5 / Claude / Grok
                 </span>
               </button>
               <button
                 onClick={() => handleProviderChange('google-gemini')}
                 className={`
-                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
+                  flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
                   ${localConfig.provider === 'google-gemini'
                     ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
                     : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
                   }
                 `}
               >
-                <Zap className={`w-6 h-6 ${localConfig.provider === 'google-gemini' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className={`text-xs font-medium ${localConfig.provider === 'google-gemini' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                <Zap className={`w-8 h-8 ${localConfig.provider === 'google-gemini' ? 'text-purple-600' : 'text-slate-400'}`} />
+                <span className={`text-sm font-medium ${localConfig.provider === 'google-gemini' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
                   Google Gemini
                 </span>
-              </button>
-              <button
-                onClick={() => handleProviderChange('anthropic-claude')}
-                className={`
-                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
-                  ${localConfig.provider === 'anthropic-claude'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
-                  }
-                `}
-              >
-                <Sparkles className={`w-6 h-6 ${localConfig.provider === 'anthropic-claude' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className={`text-xs font-medium ${localConfig.provider === 'anthropic-claude' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
-                  Claude
-                </span>
-              </button>
-              <button
-                onClick={() => handleProviderChange('xai-grok')}
-                className={`
-                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
-                  ${localConfig.provider === 'xai-grok'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
-                  }
-                `}
-              >
-                <Brain className={`w-6 h-6 ${localConfig.provider === 'xai-grok' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className={`text-xs font-medium ${localConfig.provider === 'xai-grok' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
-                  xAI Grok
-                </span>
-              </button>
-              <button
-                onClick={() => handleProviderChange('nano-banana')}
-                className={`
-                  flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all
-                  ${localConfig.provider === 'nano-banana'
-                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
-                  }
-                `}
-              >
-                <Atom className={`w-6 h-6 ${localConfig.provider === 'nano-banana' ? 'text-purple-600' : 'text-slate-400'}`} />
-                <span className={`text-xs font-medium ${localConfig.provider === 'nano-banana' ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
-                  Nano Banana
+                <span className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                  Gemini 2.0 / 2.5 / 1.5
                 </span>
               </button>
             </div>
@@ -295,12 +252,33 @@ export default function SettingsModal() {
                   type="text"
                   value={localConfig.azureDeploymentName || ''}
                   onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureDeploymentName: e.target.value }))}
-                  placeholder="gpt-4o, gpt-5-chat, claude-opus-4-1 など"
+                  placeholder="デプロイメント名を入力"
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
                 />
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  例: gpt-4o, gpt-5-chat, gpt-5.1-chat, gpt-5.2-chat, claude-opus-4-1
-                </p>
+                
+                {/* デプロイメント名の例 */}
+                <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Info className="w-4 h-4 text-purple-500" />
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">利用可能なモデル例</span>
+                  </div>
+                  <div className="space-y-2">
+                    {AZURE_DEPLOYMENT_EXAMPLES.map((group) => (
+                      <div key={group.category} className="flex flex-wrap gap-1 items-center">
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mr-1">{group.category}:</span>
+                        {group.examples.map((example) => (
+                          <button
+                            key={example}
+                            onClick={() => setLocalConfig((prev) => ({ ...prev, azureDeploymentName: example }))}
+                            className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-800/50 transition-colors"
+                          >
+                            {example}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -359,150 +337,6 @@ export default function SettingsModal() {
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
                 >
                   {GEMINI_MODELS.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label} - {model.description}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Anthropic Claude Config */}
-          {localConfig.provider === 'anthropic-claude' && (
-            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                <ExternalLink className="w-4 h-4" />
-                <a 
-                  href="https://console.anthropic.com/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="hover:text-purple-500 underline"
-                >
-                  Anthropic Console で API キーを取得
-                </a>
-              </div>
-
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                  <Key className="w-4 h-4" />
-                  API キー
-                </label>
-                <input
-                  type="password"
-                  value={localConfig.claudeApiKey || ''}
-                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, claudeApiKey: e.target.value }))}
-                  placeholder="sk-ant-..."
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  モデル
-                </label>
-                <select
-                  value={localConfig.claudeModel || 'claude-sonnet-4-20250514'}
-                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, claudeModel: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
-                >
-                  {CLAUDE_MODELS.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label} - {model.description}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* xAI Grok Config */}
-          {localConfig.provider === 'xai-grok' && (
-            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                <ExternalLink className="w-4 h-4" />
-                <a 
-                  href="https://x.ai/api" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="hover:text-purple-500 underline"
-                >
-                  xAI で API キーを取得
-                </a>
-              </div>
-
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                  <Key className="w-4 h-4" />
-                  API キー
-                </label>
-                <input
-                  type="password"
-                  value={localConfig.grokApiKey || ''}
-                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, grokApiKey: e.target.value }))}
-                  placeholder="xai-..."
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  モデル
-                </label>
-                <select
-                  value={localConfig.grokModel || 'grok-3'}
-                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, grokModel: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
-                >
-                  {GROK_MODELS.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.label} - {model.description}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Nano Banana Config */}
-          {localConfig.provider === 'nano-banana' && (
-            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                <ExternalLink className="w-4 h-4" />
-                <a 
-                  href="https://www.genspark.ai" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="hover:text-purple-500 underline"
-                >
-                  Genspark で Nano Banana を利用
-                </a>
-              </div>
-
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                  <Key className="w-4 h-4" />
-                  API キー
-                </label>
-                <input
-                  type="password"
-                  value={localConfig.nanoBananaApiKey || ''}
-                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, nanoBananaApiKey: e.target.value }))}
-                  placeholder="your-nano-banana-api-key"
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  モデル
-                </label>
-                <select
-                  value={localConfig.nanoBananaModel || 'nano-banana-pro'}
-                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, nanoBananaModel: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
-                >
-                  {NANO_BANANA_MODELS.map((model) => (
                     <option key={model.value} value={model.value}>
                       {model.label} - {model.description}
                     </option>

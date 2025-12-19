@@ -44,12 +44,13 @@ export interface Chat {
   isPinned?: boolean;
 }
 
-export type APIProvider = 'azure-openai' | 'google-gemini' | 'anthropic-claude' | 'xai-grok' | 'nano-banana';
+// Azure OpenAI で Claude/Grok 等も提供されるため、プロバイダーは2つに統合
+export type APIProvider = 'azure-openai' | 'google-gemini';
 export type SearchProvider = 'tavily' | 'brave' | 'duckduckgo';
 
 export interface APIConfig {
   provider: APIProvider;
-  // Azure OpenAI
+  // Azure OpenAI (GPT-4o, GPT-5, Claude, Grok 等全てのモデルをデプロイメント名で指定)
   azureEndpoint?: string;
   azureApiKey?: string;
   azureDeploymentName?: string;
@@ -57,15 +58,6 @@ export interface APIConfig {
   // Google Gemini
   geminiApiKey?: string;
   geminiModel?: string;
-  // Anthropic Claude
-  claudeApiKey?: string;
-  claudeModel?: string;
-  // xAI Grok
-  grokApiKey?: string;
-  grokModel?: string;
-  // Nano Banana
-  nanoBananaApiKey?: string;
-  nanoBananaModel?: string;
   // Agent settings
   enableAgent?: boolean;
   // Search API settings
@@ -167,24 +159,14 @@ export const GEMINI_MODELS = [
   { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: '高性能・大容量コンテキスト' },
 ] as const;
 
-// Claude Model Options (Anthropic API)
-export const CLAUDE_MODELS = [
-  { value: 'claude-opus-4-20250514', label: 'Claude Opus 4', description: '最高性能・最新' },
-  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', description: 'バランス型・最新' },
-  { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', description: 'コスパ良好' },
-  { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', description: '高速・軽量' },
-  { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', description: '高性能' },
-] as const;
-
-// xAI Grok Model Options
-export const GROK_MODELS = [
-  { value: 'grok-3', label: 'Grok-3', description: '最新・高性能' },
-  { value: 'grok-3-mini', label: 'Grok-3 Mini', description: '軽量・高速' },
-  { value: 'grok-2-1212', label: 'Grok-2', description: '安定版' },
-] as const;
-
-// Nano Banana Model Options
-export const NANO_BANANA_MODELS = [
-  { value: 'nano-banana-pro', label: 'Nano Banana Pro', description: '画像生成・最高性能' },
-  { value: 'nano-banana-lite', label: 'Nano Banana Lite', description: '軽量版' },
+// Azure OpenAI で利用可能なモデル例（デプロイメント名の例）
+export const AZURE_DEPLOYMENT_EXAMPLES = [
+  // OpenAI モデル
+  { category: 'OpenAI GPT', examples: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4'] },
+  { category: 'OpenAI GPT-5', examples: ['gpt-5-chat', 'gpt-5.1-chat', 'gpt-5.2-chat', 'gpt-5-mini'] },
+  { category: 'OpenAI o-series', examples: ['o1', 'o1-mini', 'o3', 'o3-mini', 'o4-mini'] },
+  // Anthropic Claude (Azure経由)
+  { category: 'Claude', examples: ['claude-opus-4-1', 'claude-sonnet-4', 'claude-3-5-sonnet'] },
+  // xAI Grok (Azure経由)
+  { category: 'Grok', examples: ['grok-3', 'grok-3-mini'] },
 ] as const;
