@@ -1,4 +1,4 @@
-import { APIConfig, Message, ToolCall, ImageAttachment, useMaxCompletionTokens } from '@/types';
+import { APIConfig, Message, ToolCall, ImageAttachment, useMaxCompletionTokens, isGPT5Model } from '@/types';
 import { getOpenAITools, getGeminiTools, executeTool } from './tools';
 
 export interface AgentResponse {
@@ -233,12 +233,18 @@ async function sendAzureOpenAI(
 
   // 2025年以降のAPI or GPT-5系モデルは max_completion_tokens を使用
   const useNewTokenParam = useMaxCompletionTokens(config.azureApiVersion, config.azureDeploymentName);
+  const isReasoningModel = isGPT5Model(config.azureDeploymentName);
   
   const requestBody: Record<string, unknown> = {
     messages: formattedMessages,
     stream: true,
-    temperature: 0.7,
   };
+
+  // GPT-5 reasoning models では temperature, top_p 等はサポートされていない
+  // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning
+  if (!isReasoningModel) {
+    requestBody.temperature = 0.7;
+  }
 
   // 新しいAPIでは max_completion_tokens、従来は max_tokens
   if (useNewTokenParam) {

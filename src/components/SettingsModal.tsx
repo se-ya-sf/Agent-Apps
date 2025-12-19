@@ -9,7 +9,8 @@ import {
   AZURE_OPENAI_API_VERSIONS,
   CLAUDE_MODELS,
   GROK_MODELS,
-  NANO_BANANA_MODELS
+  NANO_BANANA_MODELS,
+  isGPT5Model
 } from '@/types';
 import { 
   X, 
@@ -67,16 +68,28 @@ export default function SettingsModal() {
 
         const url = `${localConfig.azureEndpoint}/openai/deployments/${localConfig.azureDeploymentName}/chat/completions?api-version=${localConfig.azureApiVersion || '2025-04-01-preview'}`;
         
+        // GPT-5系モデルかどうかを判定（max_tokensがサポートされていない）
+        const isGPT5 = isGPT5Model(localConfig.azureDeploymentName);
+        
+        // リクエストボディの構築
+        const requestBody: Record<string, unknown> = {
+          messages: [{ role: 'user', content: 'Hello' }],
+        };
+        
+        // GPT-5系では max_completion_tokens、それ以外は max_tokens
+        if (isGPT5) {
+          requestBody.max_completion_tokens = 50;
+        } else {
+          requestBody.max_tokens = 10;
+        }
+
         const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'api-key': localConfig.azureApiKey,
           },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: 'Hello' }],
-            max_tokens: 10,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {

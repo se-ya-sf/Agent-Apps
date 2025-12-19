@@ -121,11 +121,25 @@ export const AZURE_OPENAI_API_VERSIONS = [
   '2024-08-01-preview',  // Structured Outputs
 ] as const;
 
-// GPT-5系モデルかどうかを判定するヘルパー
+// GPT-5系モデル (reasoning models) かどうかを判定するヘルパー
+// 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning
+// GPT-5シリーズ、o1/o3/o4シリーズはreasoningモデルで、max_tokens等がサポートされない
 export const isGPT5Model = (deploymentName?: string): boolean => {
   if (!deploymentName) return false;
   const name = deploymentName.toLowerCase();
-  return name.includes('gpt-5') || name.includes('o1') || name.includes('o3');
+  
+  // GPT-5 シリーズ: gpt-5, gpt-5.1, gpt-5.2, gpt-5-chat, gpt-5.1-chat, gpt-5.2-chat など
+  // ドット付き (gpt-5.1) とハイフン付き (gpt-5-1) の両方をサポート
+  if (name.includes('gpt-5') || name.includes('gpt5')) return true;
+  
+  // O-series reasoning models: o1, o1-preview, o1-mini, o3, o3-mini, o3-pro, o4-mini
+  // 正規表現でoの後に数字が続くパターンをチェック
+  if (/\bo[134]-/.test(name) || /\bo[134]$/.test(name) || /\bo[134]mini/.test(name)) return true;
+  
+  // codex-mini (reasoning model)
+  if (name === 'codex-mini' || name.includes('codex-mini')) return true;
+  
+  return false;
 };
 
 // 新しいAPIバージョン（2025年以降）かどうかを判定
