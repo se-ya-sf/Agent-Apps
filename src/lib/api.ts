@@ -1,4 +1,4 @@
-import { APIConfig, Message, ToolCall, ImageAttachment, useMaxCompletionTokens, isGPT5Model } from '@/types';
+import { APIConfig, Message, ToolCall, ImageAttachment, useMaxCompletionTokens, isGPT5Model, isClaudeModel } from '@/types';
 import { getOpenAITools, getGeminiTools, executeTool } from './tools';
 
 export interface AgentResponse {
@@ -102,7 +102,7 @@ interface RAGSearchResult {
   searchPerformed: boolean;
 }
 
-// Azure AI Search からドキュメントを検索
+// Azure AI Search からドキュメントを検索（API Route経由でCORS回避）
 async function searchAzureIndex(
   query: string,
   config: APIConfig
@@ -112,19 +112,17 @@ async function searchAzureIndex(
   }
 
   try {
-    const searchUrl = `${config.azureSearchEndpoint}/indexes/${config.azureSearchIndexName}/docs/search?api-version=2024-07-01`;
-    
-    const response = await fetch(searchUrl, {
+    // API Route経由で検索（CORS回避）
+    const response = await fetch('/api/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api-key': config.azureSearchApiKey,
       },
       body: JSON.stringify({
-        search: query,
-        top: 5,
-        queryType: 'semantic',
-        semanticConfiguration: 'default',
+        searchEndpoint: config.azureSearchEndpoint,
+        searchApiKey: config.azureSearchApiKey,
+        indexName: config.azureSearchIndexName,
+        query: query,
       }),
     });
 
@@ -152,6 +150,224 @@ async function searchAzureIndex(
   }
 }
 
+// Azure Foundry Claude モデル用の送信関数
+// 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude
+// Claude は Anthropic Messages API 形式を使用 (エンドポイント: /anthropic/v1/messages)
+async function sendAzureClaude(
+  messages: Message[],
+  config: APIConfig,
+  options: SendMessageOptions
+): Promise<AgentResponse> {
+  if (!config.azureEndpoint || !config.azureApiKey || !config.azureDeploymentName) {
+    throw new Error('Azure OpenAI / Foundry の設定が不完全です。設定画面で必要な情報を入力してください。');
+  }
+
+  // Azure Foundry Claude エンドポイント
+  // 形式: https://<resource-name>.services.ai.azure.com/anthropic/v1/messages
+  // または: https://<resource-name>.openai.azure.com/anthropic/v1/messages (従来形式)
+  let baseEndpoint = config.azureEndpoint;
+  // .openai.azure.com を .services.ai.azure.com に変換（必要に応じて）
+  if (baseEndpoint.includes('.openai.azure.com')) {
+    baseEndpoint = baseEndpoint.replace('.openai.azure.com', '.services.ai.azure.com');
+  }
+  const url = `${baseEndpoint}/anthropic/v1/messages`;
+
+  // Anthropic Messages API 形式にメッセージを変換
+  const systemMessage = messages.find(m => m.role === 'system');
+  const anthropicMessages = messages
+    .filter(m => m.role !== 'system')
+    .map(m => {
+      // ツール呼び出し結果の処理
+      if (m.role === 'tool') {
+        return {
+          role: 'user' as const,
+          content: [
+            {
+              type: 'tool_result' as const,
+              tool_use_id: m.toolCallId,
+              content: m.content,
+            },
+          ],
+        };
+      }
+
+      // ツール呼び出しを含むアシスタントメッセージ
+      if (m.toolCalls && m.toolCalls.length > 0) {
+        const contentParts: Array<{type: string; text?: string; id?: string; name?: string; input?: unknown}> = [];
+        if (m.content) {
+          contentParts.push({ type: 'text', text: m.content });
+        }
+        for (const tc of m.toolCalls) {
+          let args = {};
+          try {
+            args = JSON.parse(tc.function.arguments);
+          } catch {
+            args = {};
+          }
+          contentParts.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.function.name,
+            input: args,
+          });
+        }
+        return {
+          role: 'assistant' as const,
+          content: contentParts,
+        };
+      }
+
+      // 画像付きユーザーメッセージ
+      if (m.images && m.images.length > 0 && m.role === 'user') {
+        const contentParts: Array<{type: string; text?: string; source?: {type: string; media_type: string; data: string}}> = [];
+        if (m.content) {
+          contentParts.push({ type: 'text', text: m.content });
+        }
+        for (const img of m.images) {
+          if (img.url.startsWith('data:')) {
+            const [header, base64Data] = img.url.split(',');
+            const mimeType = header.match(/data:(.*);/)?.[1] || 'image/jpeg';
+            contentParts.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mimeType,
+                data: base64Data,
+              },
+            });
+          }
+        }
+        return {
+          role: 'user' as const,
+          content: contentParts,
+        };
+      }
+
+      // 通常のメッセージ
+      return {
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      };
+    });
+
+  // リクエストボディの構築
+  const requestBody: Record<string, unknown> = {
+    model: config.azureDeploymentName,
+    max_tokens: 16384,
+    messages: anthropicMessages,
+    stream: true,
+  };
+
+  // システムプロンプトの追加
+  if (systemMessage) {
+    requestBody.system = systemMessage.content;
+  }
+
+  // エージェントモード時のツール追加
+  if (options.enableAgent) {
+    const tools = getOpenAITools();
+    requestBody.tools = tools.map(tool => ({
+      name: tool.function.name,
+      description: tool.function.description,
+      input_schema: tool.function.parameters,
+    }));
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': config.azureApiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Azure Claude API エラー: ${response.status} - ${errorText}`);
+  }
+
+  return processClaudeStream(response, options.onChunk);
+}
+
+// Claude ストリームレスポンスの処理
+async function processClaudeStream(
+  response: Response,
+  onChunk: (chunk: string) => void
+): Promise<AgentResponse> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('ストリームの読み取りに失敗しました');
+
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let buffer = '';
+  const toolCalls: ToolCall[] = [];
+  let currentToolUse: { id: string; name: string; arguments: string } | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim() || !line.startsWith('data: ')) continue;
+
+      const data = line.slice(6);
+      if (data === '[DONE]') continue;
+
+      try {
+        const json = JSON.parse(data);
+
+        // content_block_start - ツール使用開始
+        if (json.type === 'content_block_start' && json.content_block?.type === 'tool_use') {
+          currentToolUse = {
+            id: json.content_block.id,
+            name: json.content_block.name,
+            arguments: '',
+          };
+        }
+
+        // content_block_delta - テキストまたはツール引数のデルタ
+        if (json.type === 'content_block_delta') {
+          if (json.delta?.type === 'text_delta' && json.delta.text) {
+            fullContent += json.delta.text;
+            onChunk(fullContent);
+          }
+          if (json.delta?.type === 'input_json_delta' && json.delta.partial_json && currentToolUse) {
+            currentToolUse.arguments += json.delta.partial_json;
+          }
+        }
+
+        // content_block_stop - ツール使用終了
+        if (json.type === 'content_block_stop' && currentToolUse) {
+          toolCalls.push({
+            id: currentToolUse.id,
+            type: 'function',
+            function: {
+              name: currentToolUse.name,
+              arguments: currentToolUse.arguments,
+            },
+          });
+          currentToolUse = null;
+        }
+
+        // message_delta - メッセージ終了情報
+        if (json.type === 'message_delta') {
+          // 処理完了
+        }
+      } catch {
+        // JSON パースエラーはスキップ
+      }
+    }
+  }
+
+  return { content: fullContent, toolCalls };
+}
+
 async function sendAzureOpenAI(
   messages: Message[],
   config: APIConfig,
@@ -159,6 +375,12 @@ async function sendAzureOpenAI(
 ): Promise<AgentResponse> {
   if (!config.azureEndpoint || !config.azureApiKey || !config.azureDeploymentName) {
     throw new Error('Azure OpenAI の設定が不完全です。設定画面で必要な情報を入力してください。');
+  }
+
+  // Claude モデルの場合は Anthropic Messages API を使用
+  // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude
+  if (isClaudeModel(config.azureDeploymentName)) {
+    return sendAzureClaude(messages, config, options);
   }
 
   const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2025-04-01-preview'}`;

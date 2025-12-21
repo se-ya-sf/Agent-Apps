@@ -165,8 +165,17 @@ export const AZURE_DEPLOYMENT_EXAMPLES = [
   { category: 'OpenAI GPT', examples: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4'] },
   { category: 'OpenAI GPT-5', examples: ['gpt-5-chat', 'gpt-5.1-chat', 'gpt-5.2-chat', 'gpt-5-mini'] },
   { category: 'OpenAI o-series', examples: ['o1', 'o1-mini', 'o3', 'o3-mini', 'o4-mini'] },
-  // Anthropic Claude (Azure経由)
-  { category: 'Claude', examples: ['claude-opus-4-1', 'claude-sonnet-4', 'claude-3-5-sonnet'] },
+  // Anthropic Claude (Azure Foundry経由)
+  // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude
+  { category: 'Claude', examples: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'] },
   // xAI Grok (Azure経由)
   { category: 'Grok', examples: ['grok-3', 'grok-3-mini'] },
 ] as const;
+
+// Claude モデルかどうかを判定するヘルパー
+// Azure Foundry の Claude は専用エンドポイント（/anthropic/v1/messages）が必要
+export const isClaudeModel = (deploymentName?: string): boolean => {
+  if (!deploymentName) return false;
+  const name = deploymentName.toLowerCase();
+  return name.includes('claude');
+};
