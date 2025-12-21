@@ -95,13 +95,20 @@ export async function runAgentLoop(
   return finalContent;
 }
 
+// RAG検索結果の型定義
+interface RAGSearchResult {
+  hasResults: boolean;
+  context: string;
+  searchPerformed: boolean;
+}
+
 // Azure AI Search からドキュメントを検索
 async function searchAzureIndex(
   query: string,
   config: APIConfig
-): Promise<string> {
+): Promise<RAGSearchResult> {
   if (!config.azureSearchEndpoint || !config.azureSearchApiKey || !config.azureSearchIndexName) {
-    return '';
+    return { hasResults: false, context: '', searchPerformed: false };
   }
 
   try {
@@ -123,12 +130,12 @@ async function searchAzureIndex(
 
     if (!response.ok) {
       console.error('Azure Search error:', response.status);
-      return '';
+      return { hasResults: false, context: '', searchPerformed: true };
     }
 
     const data = await response.json();
     if (!data.value || data.value.length === 0) {
-      return '';
+      return { hasResults: false, context: '', searchPerformed: true };
     }
 
     // 検索結果をコンテキストとして整形
@@ -138,10 +145,10 @@ async function searchAzureIndex(
       )
       .join('\n\n');
 
-    return context;
+    return { hasResults: true, context, searchPerformed: true };
   } catch (error) {
     console.error('Azure Search error:', error);
-    return '';
+    return { hasResults: false, context: '', searchPerformed: true };
   }
 }
 
@@ -157,11 +164,11 @@ async function sendAzureOpenAI(
   const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2025-04-01-preview'}`;
 
   // RAGが有効な場合、最後のユーザーメッセージでインデックス検索
-  let ragContext = '';
+  let ragSearchResult: RAGSearchResult = { hasResults: false, context: '', searchPerformed: false };
   if (config.enableRAG && config.azureSearchEndpoint && config.azureSearchApiKey && config.azureSearchIndexName) {
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
     if (lastUserMessage) {
-      ragContext = await searchAzureIndex(lastUserMessage.content, config);
+      ragSearchResult = await searchAzureIndex(lastUserMessage.content, config);
     }
   }
 
@@ -210,17 +217,59 @@ async function sendAzureOpenAI(
     };
   });
 
-  // RAGコンテキストがある場合、システムメッセージに追加
-  if (ragContext) {
+  // RAGが有効な場合のシステムプロンプト処理
+  if (config.enableRAG && ragSearchResult.searchPerformed) {
     const systemIndex = formattedMessages.findIndex(m => m.role === 'system');
-    const ragAddition = `\n\n[参照ドキュメント]\n以下のドキュメントを参考に回答してください:\n${ragContext}`;
+    
+    let ragSystemPrompt: string;
+    
+    if (ragSearchResult.hasResults) {
+      // インデックスに情報がある場合: インデックスの情報のみで回答
+      ragSystemPrompt = `
+あなたは社内ドキュメント検索アシスタントです。
+
+【重要なルール】
+1. 以下の「参照ドキュメント」の情報のみを使用して回答してください
+2. 参照ドキュメントに記載されている情報を正確に伝えてください
+3. 参照ドキュメントに記載がない追加情報を勝手に補足しないでください
+4. 回答の最後に、どのドキュメント（番号）を参照したか明記してください
+
+【参照ドキュメント】
+${ragSearchResult.context}
+`;
+    } else {
+      // インデックスに情報がない場合: ユーザーに確認を促す
+      ragSystemPrompt = `
+あなたは社内ドキュメント検索アシスタントです。
+
+【重要】
+社内ドキュメント（Azure AI Search インデックス）を検索しましたが、該当する情報が見つかりませんでした。
+
+以下のように回答してください：
+1. 「社内ドキュメントには該当する情報が見つかりませんでした。」と伝える
+2. 「Web検索で調べる」または「AIの一般知識で回答する」ことが可能であることを伝える
+3. ユーザーにどちらを希望するか確認する
+
+【回答例】
+「申し訳ございません。社内ドキュメントには「〇〇」に関する情報が見つかりませんでした。
+
+以下の方法で調べることができます：
+- **Web検索**: 最新のインターネット情報から検索します
+- **一般知識**: AIの学習済み知識から回答します
+
+どちらをご希望ですか？」
+
+ユーザーが「調べて」「検索して」「教えて」などと言った場合は、Web検索ツール（web_search）を使用して回答してください。
+`;
+    }
     
     if (systemIndex >= 0) {
-      formattedMessages[systemIndex].content += ragAddition;
+      // 既存のシステムメッセージを置き換え
+      formattedMessages[systemIndex].content = ragSystemPrompt;
     } else {
       formattedMessages.unshift({
         role: 'system',
-        content: `あなたは親切なAIアシスタントです。${ragAddition}`,
+        content: ragSystemPrompt,
       });
     }
   }
