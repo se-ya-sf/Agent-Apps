@@ -24,8 +24,7 @@ import {
   Check,
   Mic,
   MicOff,
-  Volume2,
-  Square
+  Volume2
 } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 
@@ -81,7 +80,6 @@ export default function ChatArea() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
   
   const {
     chats,
@@ -146,16 +144,6 @@ export default function ChatArea() {
 
   const removeImage = (id: string) => {
     setImages((prev) => prev.filter((img) => img.id !== id));
-  };
-
-  // AI応答を停止する関数
-  const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setLoading(false);
-    resetAgentState();
   };
 
   // 音声入力機能
@@ -230,9 +218,6 @@ export default function ChatArea() {
 
     setLoading(true);
     setAgentState({ isThinking: true });
-    
-    // AbortController を作成
-    abortControllerRef.current = new AbortController();
 
     try {
       const chat = useStore.getState().chats.find((c) => c.id === chatId);
@@ -274,7 +259,6 @@ export default function ChatArea() {
           },
           enableAgent: apiConfig.enableAgent,
           images: userImages,
-          abortSignal: abortControllerRef.current?.signal,
         });
 
         // If no tool calls, we're done
@@ -340,17 +324,11 @@ export default function ChatArea() {
         updateChatTitle(chatId!, title);
       }
     } catch (error) {
-      // 中断の場合は特別なメッセージ
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        updateLastMessage(chatId!, '(応答を停止しました)');
-      } else {
-        const errorMessage = error instanceof Error ? error.message : 'エラーが発生しました';
-        updateLastMessage(chatId!, `エラー: ${errorMessage}`);
-      }
+      const errorMessage = error instanceof Error ? error.message : 'エラーが発生しました';
+      updateLastMessage(chatId!, `エラー: ${errorMessage}`);
     } finally {
       setLoading(false);
       resetAgentState();
-      abortControllerRef.current = null;
     }
   };
 
@@ -660,24 +638,17 @@ export default function ChatArea() {
               {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
             
-            {isLoading ? (
-              <button
-                type="button"
-                onClick={handleStop}
-                className="m-2 p-2.5 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg"
-                title="停止"
-              >
-                <Square className="w-5 h-5" />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={(!input.trim() && images.length === 0) || !isConfigured}
-                className="m-2 p-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-              >
+            <button
+              type="submit"
+              disabled={(!input.trim() && images.length === 0) || isLoading || !isConfigured}
+              className="m-2 p-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
                 <Send className="w-5 h-5" />
-              </button>
-            )}
+              )}
+            </button>
           </div>
           <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
             Enter で送信 / Shift + Enter で改行 / 🎤 音声入力 / 画像もアップロード可能
