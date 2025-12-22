@@ -5,6 +5,7 @@ import { useStore } from '@/store/useStore';
 import { 
   APIProvider, 
   SearchProvider, 
+  ReasoningEffort,
   GEMINI_MODELS, 
   AZURE_OPENAI_API_VERSIONS,
   AZURE_DEPLOYMENT_EXAMPLES,
@@ -27,7 +28,8 @@ import {
   Eye,
   Globe,
   Database,
-  Info
+  Info,
+  Brain
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -295,6 +297,50 @@ export default function SettingsModal() {
                   ))}
                 </select>
               </div>
+
+              {/* 推論強度設定 (GPT-5/o-series モデルの場合のみ表示) */}
+              {isGPT5Model(localConfig.azureDeploymentName) && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <Brain className="w-4 h-4" />
+                    推論強度
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'low' as ReasoningEffort, label: '弱', desc: '高速・低コスト' },
+                      { value: 'medium' as ReasoningEffort, label: '中', desc: 'バランス' },
+                      { value: 'high' as ReasoningEffort, label: '強', desc: '高品質・高コスト' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setLocalConfig((prev) => ({ ...prev, reasoningEffort: option.value }))}
+                        className={`
+                          p-3 rounded-xl border-2 transition-all text-center
+                          ${(localConfig.reasoningEffort || 'medium') === option.value
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                          }
+                        `}
+                      >
+                        <div className={`text-sm font-medium ${
+                          (localConfig.reasoningEffort || 'medium') === option.value 
+                            ? 'text-purple-700 dark:text-purple-300' 
+                            : 'text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {option.label}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {option.desc}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    GPT-5やo-seriesモデルでの推論の深さを調整します
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
