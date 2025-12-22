@@ -12,7 +12,14 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { searchEndpoint, searchApiKey, indexName, query, useSimpleSearch } = body;
+    const {
+      searchEndpoint,
+      searchApiKey,
+      indexName,
+      query,
+      useSimpleSearch,
+      semanticConfiguration,
+    } = body;
 
     if (!searchEndpoint || !searchApiKey || !indexName || !query) {
       return NextResponse.json(
@@ -25,26 +32,32 @@ export async function POST(request: NextRequest) {
     const normalizedEndpoint = searchEndpoint.replace(/\/$/, '');
     const searchUrl = `${normalizedEndpoint}/indexes/${indexName}/docs/search?api-version=2024-07-01`;
 
+    // セマンティック設定名: 明示指定がない場合はインデックス名ベースで推測
+    const resolvedSemanticConfiguration =
+      semanticConfiguration || `${indexName}-semantic-configuration`;
+
     // シンプル検索を使用するかどうか（フォールバック時 or 明示指定時）
-    const searchBody = useSimpleSearch 
+    const searchBody = useSimpleSearch
       ? {
           search: query,
           top: 5,
           queryType: 'simple',
           // シンプル検索では searchFields を指定して検索対象を明確化
-          select: 'content,title,chunk,id',
+          select: 'chunk_id,chunk,title,parent_id',
+          searchFields: 'chunk,title,chunk_id',
         }
       : {
           search: query,
           top: 5,
           queryType: 'semantic',
-          semanticConfiguration: 'default',
+          semanticConfiguration: resolvedSemanticConfiguration,
         };
 
     console.log('Azure Search リクエスト:', {
       url: searchUrl,
       indexName,
       queryType: searchBody.queryType,
+      semanticConfiguration: !useSimpleSearch ? resolvedSemanticConfiguration : undefined,
       query: query.substring(0, 100) + '...',
     });
 
