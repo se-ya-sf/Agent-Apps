@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { sendMessage, isApiConfigured } from '@/lib/api';
 import { executeTool, AVAILABLE_TOOLS } from '@/lib/tools';
-import { ImageAttachment } from '@/types';
+import { ImageAttachment, Citation } from '@/types';
 import { 
   Send, 
   Loader2, 
@@ -42,6 +42,102 @@ const TOOL_LABELS: Record<string, string> = {
   get_current_time: '現在時刻取得',
   analyze_image: '画像分析',
 };
+
+// Web検索結果から引用情報を抽出
+function extractWebCitations(toolResult: string): Citation[] {
+  try {
+    const results = JSON.parse(toolResult);
+    if (!Array.isArray(results)) return [];
+    
+    return results
+      .filter((r: { url?: string; title?: string }) => r.url && r.url.length > 0)
+      .map((r: { url: string; title: string; snippet?: string }) => ({
+        type: 'web' as const,
+        title: r.title || 'Untitled',
+        url: r.url,
+        snippet: r.snippet?.substring(0, 150) + (r.snippet && r.snippet.length > 150 ? '...' : ''),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// 引用・参照リンク表示コンポーネント
+function CitationsPanel({ citations }: { citations: Citation[] }) {
+  if (!citations || citations.length === 0) return null;
+  
+  // 重複を除去（URLまたはdocumentIdで）
+  const uniqueCitations = citations.filter((citation, index, self) => {
+    const key = citation.url || citation.documentId || citation.title;
+    return index === self.findIndex(c => (c.url || c.documentId || c.title) === key);
+  });
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+      <div className="flex items-center gap-2 mb-3 text-sm font-medium text-slate-600 dark:text-slate-400">
+        <Search className="w-4 h-4" />
+        <span>参照元 ({uniqueCitations.length}件)</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {uniqueCitations.map((citation, index) => (
+          <CitationLink key={index} citation={citation} index={index + 1} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 個別の引用リンクコンポーネント
+function CitationLink({ citation, index }: { citation: Citation; index: number }) {
+  const isWeb = citation.type === 'web' && citation.url;
+  
+  const content = (
+    <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer group">
+      <span className="flex items-center justify-center w-5 h-5 bg-purple-500 text-white text-xs font-bold rounded-full">
+        {index}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[200px]">
+          {citation.title}
+        </div>
+        {citation.snippet && (
+          <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+            {citation.snippet}
+          </div>
+        )}
+      </div>
+      {isWeb && (
+        <svg className="w-4 h-4 text-slate-400 group-hover:text-purple-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      )}
+      {!isWeb && citation.documentId && (
+        <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-600 px-2 py-0.5 rounded">
+          RAG
+        </span>
+      )}
+    </div>
+  );
+
+  if (isWeb && citation.url) {
+    return (
+      <a 
+        href={citation.url} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        title={`${citation.title}\n${citation.url}`}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div title={citation.documentId ? `Document ID: ${citation.documentId}` : citation.title}>
+      {content}
+    </div>
+  );
+}
 
 // コピーボタンコンポーネント
 function MessageCopyButton({ text }: { text: string }) {
@@ -92,6 +188,7 @@ export default function ChatArea() {
     createNewChat,
     addMessage,
     updateLastMessage,
+    updateLastMessageCitations,
     updateChatTitle,
     setLoading,
     setAgentState,
@@ -261,6 +358,7 @@ export default function ChatArea() {
       const maxIterations = 5;
       let currentMessages = [...messagesWithSystem];
       let finalContent = '';
+      const allCitations: Citation[] = []; // 全ての引用を収集
 
       while (iterations < maxIterations) {
         iterations++;
@@ -271,6 +369,10 @@ export default function ChatArea() {
           },
           onToolCall: (toolName) => {
             setAgentState({ currentTool: toolName });
+          },
+          onCitations: (citations) => {
+            // RAG検索の引用を収集
+            allCitations.push(...citations);
           },
           enableAgent: apiConfig.enableAgent,
           images: userImages,
@@ -284,7 +386,7 @@ export default function ChatArea() {
         }
 
         // Process tool calls
-        const toolResults: Array<{ toolCallId: string; result: string }> = [];
+        const toolResults: Array<{ toolCallId: string; result: string; toolName: string }> = [];
         
         for (const toolCall of response.toolCalls) {
           const toolName = toolCall.function.name;
@@ -304,7 +406,13 @@ export default function ChatArea() {
             braveApiKey: apiConfig.braveApiKey,
           };
           const result = await executeTool(toolName, args, searchConfig);
-          toolResults.push({ toolCallId: toolCall.id, result });
+          toolResults.push({ toolCallId: toolCall.id, result, toolName });
+          
+          // Web検索結果から引用を抽出して全体の引用リストに追加
+          if (toolName === 'web_search') {
+            const webCitations = extractWebCitations(result);
+            allCitations.push(...webCitations);
+          }
           
           setAgentState({ 
             toolResults: [...(useStore.getState().agentState.toolResults || []), { toolCallId: toolCall.id, result }]
@@ -332,6 +440,11 @@ export default function ChatArea() {
         }
 
         setAgentState({ currentTool: undefined });
+      }
+
+      // 最終的なメッセージに引用情報を追加
+      if (allCitations.length > 0 && chatId) {
+        updateLastMessageCitations(chatId, allCitations);
       }
 
       // Update chat title if it's the first message
@@ -516,6 +629,11 @@ export default function ChatArea() {
                           <span className="text-sm">考え中...</span>
                         </div>
                       )
+                    )}
+                    
+                    {/* Citations/References - 引用・参照リンク */}
+                    {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
+                      <CitationsPanel citations={message.citations} />
                     )}
                     
                     {/* Message Actions */}

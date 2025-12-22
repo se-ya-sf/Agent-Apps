@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Chat, Message, APIConfig, AgentState } from '@/types';
+import { Chat, Message, APIConfig, AgentState, Citation } from '@/types';
 
 interface AppState {
   // Chats
@@ -26,6 +26,7 @@ interface AppState {
   setCurrentChat: (chatId: string) => void;
   addMessage: (chatId: string, message: Omit<Message, 'id' | 'timestamp'>) => void;
   updateLastMessage: (chatId: string, content: string) => void;
+  updateLastMessageCitations: (chatId: string, citations: Citation[]) => void;
   updateChatTitle: (chatId: string, title: string) => void;
   togglePinChat: (chatId: string) => void;
   
@@ -142,6 +143,24 @@ export const useStore = create<AppState>()(
                   messages: chat.messages.map((msg, idx) =>
                     idx === chat.messages.length - 1
                       ? { ...msg, content }
+                      : msg
+                  ),
+                  updatedAt: new Date(),
+                }
+              : chat
+          ),
+        }));
+      },
+      
+      updateLastMessageCitations: (chatId, citations) => {
+        set((state) => ({
+          chats: state.chats.map((chat) =>
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  messages: chat.messages.map((msg, idx) =>
+                    idx === chat.messages.length - 1
+                      ? { ...msg, citations: [...(msg.citations || []), ...citations] }
                       : msg
                   ),
                   updatedAt: new Date(),
