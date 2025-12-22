@@ -103,6 +103,7 @@ interface RAGSearchResult {
 }
 
 // Azure AI Search からドキュメントを検索（API Route経由でCORS回避）
+// セマンティック検索が失敗した場合は自動的にシンプル検索にフォールバック
 async function searchAzureIndex(
   query: string,
   config: APIConfig
@@ -112,6 +113,12 @@ async function searchAzureIndex(
   }
 
   try {
+    console.log('Azure Search 検索開始:', {
+      endpoint: config.azureSearchEndpoint,
+      indexName: config.azureSearchIndexName,
+      query: query.substring(0, 50) + '...',
+    });
+    
     // API Route経由で検索（CORS回避）
     const response = await fetch('/api/search', {
       method: 'POST',
@@ -127,12 +134,37 @@ async function searchAzureIndex(
     });
 
     if (!response.ok) {
-      console.error('Azure Search error:', response.status);
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Azure Search error:', {
+        status: response.status,
+        error: errorData.error,
+        details: errorData.details,
+        suggestion: errorData.suggestion,
+      });
+      
+      // エラーがあってもフォールバックが成功していれば結果を返す
+      if (errorData._fallbackUsed && errorData.value) {
+        console.log('シンプル検索へのフォールバックが成功しました');
+        const context = errorData.value
+          .map((doc: { content?: string; title?: string; chunk?: string }, i: number) => 
+            `[${i + 1}] ${doc.content || doc.title || doc.chunk || ''}`
+          )
+          .join('\n\n');
+        return { hasResults: context.length > 0, context, searchPerformed: true };
+      }
+      
       return { hasResults: false, context: '', searchPerformed: true };
     }
 
     const data = await response.json();
+    
+    // フォールバックが使用された場合のログ
+    if (data._fallbackUsed) {
+      console.log('シンプル検索にフォールバックしました。元のエラー:', data._originalError);
+    }
+    
     if (!data.value || data.value.length === 0) {
+      console.log('Azure Search: 検索結果が0件でした');
       return { hasResults: false, context: '', searchPerformed: true };
     }
 
@@ -142,6 +174,11 @@ async function searchAzureIndex(
         `[${i + 1}] ${doc.content || doc.title || doc.chunk || ''}`
       )
       .join('\n\n');
+
+    console.log('Azure Search 成功:', {
+      resultCount: data.value.length,
+      contextLength: context.length,
+    });
 
     return { hasResults: true, context, searchPerformed: true };
   } catch (error) {
@@ -153,6 +190,7 @@ async function searchAzureIndex(
 // Azure Foundry Claude モデル用の送信関数
 // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude
 // Claude は Anthropic Messages API 形式を使用 (エンドポイント: /anthropic/v1/messages)
+// 正しいモデル名: claude-opus-4-5, claude-sonnet-4-5, claude-haiku-4-5, claude-opus-4-1
 async function sendAzureClaude(
   messages: Message[],
   config: APIConfig,
@@ -164,13 +202,22 @@ async function sendAzureClaude(
 
   // Azure Foundry Claude エンドポイント
   // 形式: https://<resource-name>.services.ai.azure.com/anthropic/v1/messages
-  // または: https://<resource-name>.openai.azure.com/anthropic/v1/messages (従来形式)
-  let baseEndpoint = config.azureEndpoint;
-  // .openai.azure.com を .services.ai.azure.com に変換（必要に応じて）
+  // 重要: Azure OpenAI (.openai.azure.com) と Azure AI Foundry (.services.ai.azure.com) は異なる
+  // Claude は Azure AI Foundry でのみ利用可能
+  let baseEndpoint = config.azureEndpoint.replace(/\/$/, ''); // 末尾のスラッシュを除去
+  
+  // .openai.azure.com → .services.ai.azure.com に変換（必要な場合）
   if (baseEndpoint.includes('.openai.azure.com')) {
     baseEndpoint = baseEndpoint.replace('.openai.azure.com', '.services.ai.azure.com');
+    console.log('エンドポイントを Azure AI Foundry 形式に変換しました:', baseEndpoint);
   }
+  
+  // エンドポイントに /anthropic が既に含まれている場合は除去
+  baseEndpoint = baseEndpoint.replace(/\/anthropic(\/.*)?$/, '');
+  
   const url = `${baseEndpoint}/anthropic/v1/messages`;
+  console.log('Claude API URL:', url);
+  console.log('使用モデル:', config.azureDeploymentName);
 
   // Anthropic Messages API 形式にメッセージを変換
   const systemMessage = messages.find(m => m.role === 'system');
@@ -273,6 +320,8 @@ async function sendAzureClaude(
     }));
   }
 
+  console.log('Claude リクエストボディ:', JSON.stringify(requestBody, null, 2));
+  
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -285,6 +334,13 @@ async function sendAzureClaude(
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('Claude API エラー詳細:', {
+      status: response.status,
+      statusText: response.statusText,
+      errorText,
+      url,
+      model: config.azureDeploymentName,
+    });
     throw new Error(`Azure Claude API エラー: ${response.status} - ${errorText}`);
   }
 
