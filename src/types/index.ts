@@ -1,3 +1,12 @@
+// 引用・参照情報
+export interface Citation {
+  type: 'web' | 'rag';
+  title: string;
+  url?: string;          // Web検索の場合
+  documentId?: string;   // RAG検索の場合（chunk_id）
+  snippet?: string;      // 引用部分の抜粋
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -10,6 +19,8 @@ export interface Message {
   images?: ImageAttachment[];
   // For audio
   audioUrl?: string;
+  // For citations/references
+  citations?: Citation[];
 }
 
 export interface ImageAttachment {
@@ -69,6 +80,10 @@ export interface APIConfig {
   azureSearchEndpoint?: string;
   azureSearchApiKey?: string;
   azureSearchIndexName?: string;
+  // Reasoning effort for GPT-5/o-series models
+  reasoningEffort?: ReasoningEffort;
+  // Deep Research mode - 複数回の検索と分析を行う
+  enableDeepResearch?: boolean;
 }
 
 export interface AppSettings {

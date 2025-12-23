@@ -1,16 +1,18 @@
-import { APIConfig, Message, ToolCall, ImageAttachment, useMaxCompletionTokens, isGPT5Model, isClaudeModel } from '@/types';
+import { APIConfig, Message, ToolCall, ImageAttachment, Citation, useMaxCompletionTokens, isGPT5Model, isClaudeModel } from '@/types';
 import { getOpenAITools, getGeminiTools, executeTool } from './tools';
 
 export interface AgentResponse {
   content: string;
   toolCalls?: ToolCall[];
   finishReason?: string;
+  citations?: Citation[]; // RAG検索の引用情報
 }
 
 export interface SendMessageOptions {
   onChunk: (chunk: string) => void;
   onToolCall?: (toolName: string) => void;
   onToolResult?: (toolName: string, result: string) => void;
+  onCitations?: (citations: Citation[]) => void; // RAG引用コールバック
   enableAgent?: boolean;
   images?: ImageAttachment[];
 }
@@ -96,10 +98,18 @@ export async function runAgentLoop(
 }
 
 // RAG検索結果の型定義
+interface RAGCitation {
+  type: 'rag';
+  title: string;
+  documentId: string;
+  snippet: string;
+}
+
 interface RAGSearchResult {
   hasResults: boolean;
   context: string;
   searchPerformed: boolean;
+  citations: RAGCitation[];
 }
 
 // Azure AI Search からドキュメントを検索（API Route経由でCORS回避）
@@ -109,7 +119,7 @@ async function searchAzureIndex(
   config: APIConfig
 ): Promise<RAGSearchResult> {
   if (!config.azureSearchEndpoint || !config.azureSearchApiKey || !config.azureSearchIndexName) {
-    return { hasResults: false, context: '', searchPerformed: false };
+    return { hasResults: false, context: '', searchPerformed: false, citations: [] };
   }
 
   try {
@@ -133,6 +143,16 @@ async function searchAzureIndex(
       }),
     });
 
+    // ドキュメントから引用情報を抽出するヘルパー関数
+    const extractCitations = (docs: Array<{ chunk?: string; title?: string; content?: string; chunk_id?: string }>): RAGCitation[] => {
+      return docs.map((doc) => ({
+        type: 'rag' as const,
+        title: doc.title || 'ドキュメント',
+        documentId: doc.chunk_id || '',
+        snippet: (doc.chunk || doc.content || '').substring(0, 150) + '...',
+      }));
+    };
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('Azure Search error:', {
@@ -145,15 +165,19 @@ async function searchAzureIndex(
       // エラーがあってもフォールバックが成功していれば結果を返す
       if (errorData._fallbackUsed && errorData.value) {
         console.log('シンプル検索へのフォールバックが成功しました');
-        const context = errorData.value
-          .map((doc: { content?: string; title?: string; chunk?: string }, i: number) => 
-            `[${i + 1}] ${doc.content || doc.title || doc.chunk || ''}`
-          )
+        const docs = errorData.value as Array<{ chunk?: string; title?: string; content?: string; chunk_id?: string }>;
+        const context = docs
+          .map((doc, i: number) => {
+            const text = doc.chunk || doc.content || '';
+            const titlePart = doc.title ? `【${doc.title}】\n` : '';
+            return `[${i + 1}] ${titlePart}${text}`;
+          })
           .join('\n\n');
-        return { hasResults: context.length > 0, context, searchPerformed: true };
+        const citations = extractCitations(docs);
+        return { hasResults: context.length > 0, context, searchPerformed: true, citations };
       }
       
-      return { hasResults: false, context: '', searchPerformed: true };
+      return { hasResults: false, context: '', searchPerformed: true, citations: [] };
     }
 
     const data = await response.json();
@@ -165,25 +189,38 @@ async function searchAzureIndex(
     
     if (!data.value || data.value.length === 0) {
       console.log('Azure Search: 検索結果が0件でした');
-      return { hasResults: false, context: '', searchPerformed: true };
+      return { hasResults: false, context: '', searchPerformed: true, citations: [] };
     }
 
-    // 検索結果をコンテキストとして整形
-    const context = data.value
-      .map((doc: { content?: string; title?: string; chunk?: string }, i: number) => 
-        `[${i + 1}] ${doc.content || doc.title || doc.chunk || ''}`
-      )
+    const docs = data.value as Array<{ chunk?: string; title?: string; content?: string; chunk_id?: string }>;
+    
+    // 検索結果をコンテキストとして整形（インデックスのスキーマに合わせて chunk を優先）
+    const context = docs
+      .map((doc, i: number) => {
+        const text = doc.chunk || doc.content || '';
+        const titlePart = doc.title ? `【${doc.title}】\n` : '';
+        return `[${i + 1}] ${titlePart}${text}`;
+      })
       .join('\n\n');
+    
+    // 引用情報を抽出
+    const citations = extractCitations(docs);
 
     console.log('Azure Search 成功:', {
       resultCount: data.value.length,
       contextLength: context.length,
+      citationsCount: citations.length,
     });
 
-    return { hasResults: true, context, searchPerformed: true };
+    return { hasResults: true, context, searchPerformed: true, citations };
   } catch (error) {
-    console.error('Azure Search error:', error);
-    return { hasResults: false, context: '', searchPerformed: true };
+    // タイムアウトエラーの場合は特別なメッセージ
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Azure Search タイムアウト: 検索に15秒以上かかりました');
+    } else {
+      console.error('Azure Search error:', error);
+    }
+    return { hasResults: false, context: '', searchPerformed: true, citations: [] };
   }
 }
 
@@ -442,11 +479,20 @@ async function sendAzureOpenAI(
   const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2025-04-01-preview'}`;
 
   // RAGが有効な場合、最後のユーザーメッセージでインデックス検索
-  let ragSearchResult: RAGSearchResult = { hasResults: false, context: '', searchPerformed: false };
+  let ragSearchResult: RAGSearchResult = { hasResults: false, context: '', searchPerformed: false, citations: [] };
   if (config.enableRAG && config.azureSearchEndpoint && config.azureSearchApiKey && config.azureSearchIndexName) {
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
     if (lastUserMessage) {
       ragSearchResult = await searchAzureIndex(lastUserMessage.content, config);
+      // RAG検索結果の引用をコールバックで通知
+      if (ragSearchResult.citations.length > 0 && options.onCitations) {
+        options.onCitations(ragSearchResult.citations.map(c => ({
+          type: c.type,
+          title: c.title,
+          documentId: c.documentId,
+          snippet: c.snippet,
+        })));
+      }
     }
   }
 
