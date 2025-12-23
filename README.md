@@ -1,6 +1,6 @@
 # AI Chat Agent - LLM Chat Application with Agent Capabilities
 
-Rakuten AI風のモダンなUIを持つLLMチャットアプリケーションです。Azure OpenAIとGoogle Gemini APIに対応し、エージェント機能（Web検索、計算、画像分析など）を搭載しています。
+ChatGPT風のモダンなUIを持つLLMチャットアプリケーションです。Azure OpenAIとGoogle Gemini APIに対応し、エージェント機能（Web検索、計算、画像分析など）を搭載しています。
 
 ![AI Chat Screenshot](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
@@ -235,6 +235,6 @@ MIT License
 
 ## Acknowledgments
 
-- UI/UX inspired by [Rakuten AI](https://ai.rakuten.co.jp/chat)
+- UI/UX inspired by [ChatGPT[
 - Built with [Next.js](https://nextjs.org/)
 - Powered by [OpenAI](https://openai.com/) and [Google AI](https://ai.google.dev/)

@@ -15,7 +15,6 @@ export interface SendMessageOptions {
   onCitations?: (citations: Citation[]) => void; // RAG引用コールバック
   enableAgent?: boolean;
   images?: ImageAttachment[];
-  abortSignal?: AbortSignal; // 停止用シグナル
 }
 
 export async function sendMessage(
@@ -130,10 +129,6 @@ async function searchAzureIndex(
       query: query.substring(0, 50) + '...',
     });
     
-    // タイムアウト付きで検索（15秒）
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    
     // API Route経由で検索（CORS回避）
     const response = await fetch('/api/search', {
       method: 'POST',
@@ -146,10 +141,7 @@ async function searchAzureIndex(
         indexName: config.azureSearchIndexName,
         query: query,
       }),
-      signal: controller.signal,
     });
-    
-    clearTimeout(timeoutId);
 
     // ドキュメントから引用情報を抽出するヘルパー関数
     const extractCitations = (docs: Array<{ chunk?: string; title?: string; content?: string; chunk_id?: string }>): RAGCitation[] => {
@@ -638,12 +630,6 @@ ${ragSearchResult.context}
   // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning
   if (!isReasoningModel) {
     requestBody.temperature = 0.7;
-  } else {
-    // reasoning モデルでは reasoning_effort パラメータを設定
-    // low: 高速・低コスト、medium: バランス、high: 高品質・高コスト
-    if (config.reasoningEffort) {
-      requestBody.reasoning_effort = config.reasoningEffort;
-    }
   }
 
   // 新しいAPIでは max_completion_tokens、従来は max_tokens
@@ -666,7 +652,6 @@ ${ragSearchResult.context}
       'api-key': config.azureApiKey,
     },
     body: JSON.stringify(requestBody),
-    signal: options.abortSignal, // 停止用シグナル
   });
 
   if (!response.ok) {
@@ -674,7 +659,7 @@ ${ragSearchResult.context}
     throw new Error(`Azure OpenAI API エラー: ${response.status} - ${errorText}`);
   }
 
-  return processAzureStream(response, options.onChunk, options.abortSignal);
+  return processAzureStream(response, options.onChunk);
 }
 
 async function sendGoogleGemini(
@@ -784,7 +769,6 @@ async function sendGoogleGemini(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(requestBody),
-    signal: options.abortSignal,
   });
 
   if (!response.ok) {
@@ -792,13 +776,12 @@ async function sendGoogleGemini(
     throw new Error(`Google Gemini API エラー: ${response.status} - ${errorText}`);
   }
 
-  return processGeminiStream(response, options.onChunk, options.abortSignal);
+  return processGeminiStream(response, options.onChunk);
 }
 
 async function processAzureStream(
   response: Response,
-  onChunk: (chunk: string) => void,
-  abortSignal?: AbortSignal
+  onChunk: (chunk: string) => void
 ): Promise<AgentResponse> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('ストリームの読み取りに失敗しました');
@@ -811,12 +794,6 @@ async function processAzureStream(
   let finishReason = '';
 
   while (true) {
-    // 停止シグナルをチェック
-    if (abortSignal?.aborted) {
-      reader.cancel();
-      throw new DOMException('リクエストが中断されました', 'AbortError');
-    }
-    
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -888,8 +865,7 @@ async function processAzureStream(
 
 async function processGeminiStream(
   response: Response,
-  onChunk: (chunk: string) => void,
-  abortSignal?: AbortSignal
+  onChunk: (chunk: string) => void
 ): Promise<AgentResponse> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('ストリームの読み取りに失敗しました');
@@ -900,12 +876,6 @@ async function processGeminiStream(
   const toolCalls: ToolCall[] = [];
 
   while (true) {
-    // 停止シグナルをチェック
-    if (abortSignal?.aborted) {
-      reader.cancel();
-      throw new DOMException('リクエストが中断されました', 'AbortError');
-    }
-    
     const { done, value } = await reader.read();
     if (done) break;
 

@@ -58,8 +58,6 @@ export interface Chat {
 // Azure OpenAI で Claude/Grok 等も提供されるため、プロバイダーは2つに統合
 export type APIProvider = 'azure-openai' | 'google-gemini';
 export type SearchProvider = 'tavily' | 'brave' | 'duckduckgo';
-// 推論強度（GPT-5系など reasoning モデル用）
-export type ReasoningEffort = 'low' | 'medium' | 'high';
 
 export interface APIConfig {
   provider: APIProvider;
