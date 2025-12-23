@@ -25,8 +25,12 @@ import {
   Mic,
   MicOff,
   Volume2,
-  Square
+  Square,
+  Zap,
+  Brain,
+  Telescope
 } from 'lucide-react';
+import { ReasoningEffort } from '@/types';
 import MarkdownRenderer from './MarkdownRenderer';
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
@@ -194,6 +198,7 @@ export default function ChatArea() {
     setAgentState,
     resetAgentState,
     toggleSettings,
+    setApiConfig,
   } = useStore();
 
   const currentChat = chats.find((c) => c.id === currentChatId);
@@ -338,24 +343,68 @@ export default function ChatArea() {
       const messagesToSend = chat.messages.filter(m => m.content !== '' || (m.images && m.images.length > 0));
 
       // Add system message for agent behavior
-      const systemMessage = {
-        id: 'system',
-        role: 'system' as const,
-        content: `あなたは親切で有能なAIアシスタントです。ユーザーの質問に対して、必要に応じてツールを使用して回答してください。
+      const isDeepResearch = apiConfig.enableDeepResearch;
+      
+      const normalSystemPrompt = `あなたは親切で有能なAIアシスタントです。ユーザーの質問に対して、必要に応じてツールを使用して回答してください。
 
 利用可能なツール:
 - web_search: 最新の情報やニュースを検索するときに使用
 - get_current_time: 現在の日時を取得するときに使用
 - calculator: 数学的な計算を行うときに使用
 
-ツールを使用した後は、その結果を元に分かりやすく回答してください。日本語で回答してください。`,
+ツールを使用した後は、その結果を元に分かりやすく回答してください。日本語で回答してください。`;
+
+      const deepResearchPrompt = `あなたは高度な調査能力を持つリサーチAIアシスタントです。
+Deep Researchモードが有効です。ユーザーの質問に対して、徹底的で包括的な調査を行ってください。
+
+## Deep Research 調査手順
+
+1. **初期分析**: 質問を分析し、必要な情報を特定
+2. **多角的検索**: 複数の異なる検索クエリで情報を収集（最低3-5回の検索を推奨）
+3. **情報の統合**: 複数のソースから得た情報を統合・比較
+4. **深掘り調査**: 初期結果で見つかった重要なトピックをさらに掘り下げ
+5. **包括的レポート作成**: 調査結果を構造化してまとめる
+
+## 利用可能なツール
+- web_search: Web検索（複数回使用して多角的に調査）
+- get_current_time: 現在の日時を取得
+- calculator: 数学的な計算
+
+## レポート形式
+調査完了後、以下の形式でレポートを作成してください：
+
+### 📊 調査レポート: [トピック]
+
+#### 概要
+[調査結果の要約]
+
+#### 主要な発見
+1. [発見1]
+2. [発見2]
+3. [発見3]
+
+#### 詳細分析
+[詳細な分析結果]
+
+#### 結論・推奨事項
+[結論とユーザーへの推奨事項]
+
+---
+**重要**: 必ず複数の検索を実行し、情報の信頼性を確認してください。
+日本語で回答してください。`;
+
+      const systemMessage = {
+        id: 'system',
+        role: 'system' as const,
+        content: isDeepResearch ? deepResearchPrompt : normalSystemPrompt,
         timestamp: new Date(),
       };
 
       const messagesWithSystem = [systemMessage, ...messagesToSend];
       
       let iterations = 0;
-      const maxIterations = 5;
+      // DeepResearchモードでは最大イテレーション数を増やす（より多くの検索を許可）
+      const maxIterations = isDeepResearch ? 10 : 5;
       let currentMessages = [...messagesWithSystem];
       let finalContent = '';
       const allCitations: Citation[] = []; // 全ての引用を収集
@@ -668,19 +717,38 @@ export default function ChatArea() {
               
               {/* Agent Status */}
               {agentState.isThinking && agentState.currentTool && (
-                <div className="flex items-center gap-3 px-4 py-3 bg-purple-50 dark:bg-purple-900/30 rounded-xl border border-purple-200 dark:border-purple-800">
-                  <div className="flex items-center justify-center w-8 h-8 bg-purple-100 dark:bg-purple-800 rounded-lg">
-                    <Wrench className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-pulse" />
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+                  apiConfig.enableDeepResearch 
+                    ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800'
+                    : 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800'
+                }`}>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${
+                    apiConfig.enableDeepResearch
+                      ? 'bg-indigo-100 dark:bg-indigo-800'
+                      : 'bg-purple-100 dark:bg-purple-800'
+                  }`}>
+                    {apiConfig.enableDeepResearch ? (
+                      <Telescope className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-pulse" />
+                    ) : (
+                      <Wrench className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-pulse" />
+                    )}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       {TOOL_ICONS[agentState.currentTool]}
-                      <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                      <span className={`text-sm font-medium ${
+                        apiConfig.enableDeepResearch
+                          ? 'text-indigo-700 dark:text-indigo-300'
+                          : 'text-purple-700 dark:text-purple-300'
+                      }`}>
+                        {apiConfig.enableDeepResearch && '🔬 Deep Research: '}
                         {TOOL_LABELS[agentState.currentTool] || agentState.currentTool} を実行中...
                       </span>
                     </div>
                   </div>
-                  <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
+                  <Loader2 className={`w-4 h-4 animate-spin ${
+                    apiConfig.enableDeepResearch ? 'text-indigo-500' : 'text-purple-500'
+                  }`} />
                 </div>
               )}
               
@@ -711,6 +779,56 @@ export default function ChatArea() {
       {/* Input Area */}
       <div className="border-t border-slate-200/50 dark:border-slate-700/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-4">
+          {/* Quick Settings Bar - 推論強度 & DeepResearch */}
+          <div className="flex items-center gap-4 mb-3 px-1">
+            {/* 推論強度セレクター */}
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-slate-400" />
+              <span className="text-xs text-slate-500 dark:text-slate-400">推論強度:</span>
+              <div className="flex gap-1">
+                {[
+                  { value: 'low', label: '弱', icon: '⚡', color: 'text-green-500 bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800' },
+                  { value: 'medium', label: '中', icon: '⚖️', color: 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800' },
+                  { value: 'high', label: '強', icon: '🔥', color: 'text-red-500 bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setApiConfig({ reasoningEffort: option.value as ReasoningEffort })}
+                    className={`px-2 py-1 text-xs rounded-lg border transition-all ${
+                      (apiConfig.reasoningEffort || 'medium') === option.value
+                        ? option.color + ' font-medium'
+                        : 'text-slate-400 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                    title={`推論強度: ${option.label}`}
+                  >
+                    {option.icon} {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* DeepResearch トグル */}
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={() => setApiConfig({ enableDeepResearch: !apiConfig.enableDeepResearch })}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                  apiConfig.enableDeepResearch
+                    ? 'text-purple-600 bg-purple-50 dark:bg-purple-900/30 border-purple-300 dark:border-purple-700 font-medium'
+                    : 'text-slate-400 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+                title="Deep Research: 複数回の検索と深い分析を行います"
+              >
+                <Telescope className={`w-4 h-4 ${apiConfig.enableDeepResearch ? 'text-purple-500' : ''}`} />
+                <span>Deep Research</span>
+                {apiConfig.enableDeepResearch && (
+                  <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
+                )}
+              </button>
+            </div>
+          </div>
+          
           {/* Image Preview */}
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">

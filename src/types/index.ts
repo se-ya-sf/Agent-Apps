@@ -84,6 +84,8 @@ export interface APIConfig {
   azureSearchIndexName?: string;
   // Reasoning effort for GPT-5/o-series models
   reasoningEffort?: ReasoningEffort;
+  // Deep Research mode - 複数回の検索と分析を行う
+  enableDeepResearch?: boolean;
 }
 
 export interface AppSettings {
