@@ -30,7 +30,7 @@ import {
   Brain,
   Telescope
 } from 'lucide-react';
-import { ReasoningEffort } from '@/types';
+import type { ReasoningEffort } from '@/types';
 import MarkdownRenderer from './MarkdownRenderer';
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
