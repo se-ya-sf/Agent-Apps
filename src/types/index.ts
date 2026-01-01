@@ -256,3 +256,15 @@ export interface CreateCalendarEventInput {
   attendees?: string[];  // メールアドレスの配列
   isAllDay?: boolean;
 }
+
+// カレンダー更新用の入力（全てオプショナル）
+export interface UpdateCalendarEventInput {
+  subject?: string;
+  startDateTime?: string; // ISO 8601
+  endDateTime?: string;   // ISO 8601
+  timeZone?: string;
+  location?: string;
+  body?: string;
+  attendees?: string[];   // メールアドレスの配列
+  isAllDay?: boolean;
+}

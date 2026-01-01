@@ -552,7 +552,9 @@ async function sendAzureOpenAI(
     const outlookEnabled = config.enableOutlook === true;
     const outlookToolsDesc = outlookEnabled ? `
 - outlook_calendar_view: Outlook カレンダーの予定を取得する
-- outlook_calendar_create: Outlook カレンダーに新しい予定を作成する` : '';
+- outlook_calendar_create: Outlook カレンダーに新しい予定を作成する
+- outlook_calendar_update: Outlook カレンダーの予定を更新・変更する
+- outlook_calendar_delete: Outlook カレンダーの予定を削除する` : '';
 
     if (ragSearchResult.hasResults) {
       // インデックスに情報がある場合
@@ -567,7 +569,9 @@ async function sendAzureOpenAI(
 ${outlookEnabled ? `
 ## カレンダー・予定に関する質問
 ユーザーが予定、スケジュール、空き時間、会議について質問した場合は、**必ず outlook_calendar_view ツールを使用**してください。
-予定の作成を依頼された場合は outlook_calendar_create を使用してください。` : ''}
+予定の作成を依頼された場合は outlook_calendar_create を使用してください。
+予定の変更・修正を依頼された場合は、まず outlook_calendar_view で対象の予定を取得し、そのIDを使って outlook_calendar_update を実行してください。
+予定の削除・キャンセルを依頼された場合は、まず outlook_calendar_view で対象の予定を取得し、ユーザーに確認を取ってから outlook_calendar_delete を実行してください。` : ''}
 
 ## 回答の優先順位
 
@@ -610,7 +614,9 @@ ${ragSearchResult.context}
 ${outlookEnabled ? `
 ## カレンダー・予定に関する質問
 ユーザーが予定、スケジュール、空き時間、会議について質問した場合は、**必ず outlook_calendar_view ツールを使用**してください。
-予定の作成を依頼された場合は outlook_calendar_create を使用してください。` : ''}
+予定の作成を依頼された場合は outlook_calendar_create を使用してください。
+予定の変更・修正を依頼された場合は、まず outlook_calendar_view で対象の予定を取得し、そのIDを使って outlook_calendar_update を実行してください。
+予定の削除・キャンセルを依頼された場合は、まず outlook_calendar_view で対象の予定を取得し、ユーザーに確認を取ってから outlook_calendar_delete を実行してください。` : ''}
 
 ## ユーザーがWeb検索を要求した場合
 以下のような要求があった場合は、**必ず web_search ツールを呼び出してください**：

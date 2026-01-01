@@ -1,7 +1,7 @@
 'use client';
 
 import { PublicClientApplication, AccountInfo, InteractionRequiredAuthError } from '@azure/msal-browser';
-import type { OutlookCalendarEvent, CreateCalendarEventInput } from '@/types';
+import type { OutlookCalendarEvent, CreateCalendarEventInput, UpdateCalendarEventInput } from '@/types';
 
 // MSAL設定
 let msalInstance: PublicClientApplication | null = null;
@@ -213,6 +213,69 @@ export async function createCalendarEvent(input: CreateCalendarEventInput): Prom
   }
 
   return callGraphApi<OutlookCalendarEvent>('/me/events', 'POST', eventBody);
+}
+
+// 予定の更新
+export async function updateCalendarEvent(eventId: string, input: UpdateCalendarEventInput): Promise<OutlookCalendarEvent> {
+  const eventBody: Record<string, unknown> = {};
+
+  if (input.subject !== undefined) {
+    eventBody.subject = input.subject;
+  }
+
+  if (input.startDateTime !== undefined) {
+    eventBody.start = {
+      dateTime: input.startDateTime,
+      timeZone: input.timeZone || 'Asia/Tokyo',
+    };
+  }
+
+  if (input.endDateTime !== undefined) {
+    eventBody.end = {
+      dateTime: input.endDateTime,
+      timeZone: input.timeZone || 'Asia/Tokyo',
+    };
+  }
+
+  if (input.location !== undefined) {
+    eventBody.location = {
+      displayName: input.location,
+    };
+  }
+
+  if (input.body !== undefined) {
+    eventBody.body = {
+      contentType: 'text',
+      content: input.body,
+    };
+  }
+
+  if (input.attendees !== undefined) {
+    eventBody.attendees = input.attendees.map(email => ({
+      emailAddress: {
+        address: email,
+      },
+      type: 'required',
+    }));
+  }
+
+  if (input.isAllDay !== undefined) {
+    eventBody.isAllDay = input.isAllDay;
+  }
+
+  return callGraphApi<OutlookCalendarEvent>(`/me/events/${eventId}`, 'PATCH', eventBody);
+}
+
+// 予定の削除
+export async function deleteCalendarEvent(eventId: string): Promise<void> {
+  await callGraphApi<void>(`/me/events/${eventId}`, 'DELETE');
+}
+
+// 予定IDで単一イベントを取得
+export async function getCalendarEventById(eventId: string): Promise<OutlookCalendarEvent> {
+  return callGraphApi<OutlookCalendarEvent>(
+    `/me/events/${eventId}?$select=id,subject,start,end,location,isAllDay,organizer,attendees,bodyPreview,webLink,showAs`
+  );
 }
 
 // フリービジー情報の取得（簡易版）

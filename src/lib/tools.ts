@@ -134,6 +134,70 @@ export const OUTLOOK_TOOLS: ToolDefinition[] = [
       required: ['subject', 'startDateTime', 'endDateTime'],
     },
   },
+  {
+    name: 'outlook_calendar_update',
+    description: 'Outlook/Microsoft 365 カレンダーの既存の予定を更新・変更します。予定のタイトル、日時、場所などを変更する際に使用してください。変更したい項目のみ指定してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        eventId: {
+          type: 'string',
+          description: '更新する予定のID（outlook_calendar_viewで取得した予定のidフィールド）',
+        },
+        subject: {
+          type: 'string',
+          description: '新しい予定のタイトル/件名（変更する場合のみ）',
+        },
+        startDateTime: {
+          type: 'string',
+          description: '新しい開始日時（ISO 8601形式、例: 2026-01-15T14:00:00）（変更する場合のみ）',
+        },
+        endDateTime: {
+          type: 'string',
+          description: '新しい終了日時（ISO 8601形式、例: 2026-01-15T15:00:00）（変更する場合のみ）',
+        },
+        timeZone: {
+          type: 'string',
+          description: 'タイムゾーン（例: Asia/Tokyo）。デフォルトはAsia/Tokyo',
+        },
+        location: {
+          type: 'string',
+          description: '新しい場所（変更する場合のみ）',
+        },
+        body: {
+          type: 'string',
+          description: '新しい予定の説明/本文（変更する場合のみ）',
+        },
+        attendees: {
+          type: 'string',
+          description: '新しい参加者のメールアドレス（カンマ区切り、例: user1@example.com,user2@example.com）（変更する場合のみ）',
+        },
+        isAllDay: {
+          type: 'string',
+          description: '終日予定かどうか（true/false）（変更する場合のみ）',
+        },
+      },
+      required: ['eventId'],
+    },
+  },
+  {
+    name: 'outlook_calendar_delete',
+    description: 'Outlook/Microsoft 365 カレンダーから予定を削除します。予定のキャンセル、削除に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        eventId: {
+          type: 'string',
+          description: '削除する予定のID（outlook_calendar_viewで取得した予定のidフィールド）',
+        },
+        confirmDelete: {
+          type: 'string',
+          description: '削除確認（"yes"または"true"で削除を実行）。安全のため必須です。',
+        },
+      },
+      required: ['eventId', 'confirmDelete'],
+    },
+  },
 ];
 
 // Search configuration
@@ -513,6 +577,122 @@ export async function executeTool(
       } catch (error) {
         return JSON.stringify({
           error: `予定作成エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'outlook_calendar_update': {
+      // Outlookカレンダー更新
+      if (!toolContext?.outlookEnabled) {
+        return JSON.stringify({
+          error: 'Outlook連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { updateCalendarEvent, isSignedIn } = await import('./outlook');
+        
+        if (!isSignedIn()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const eventId = args.eventId as string;
+        if (!eventId) {
+          return JSON.stringify({
+            error: '予定のID（eventId）が指定されていません。先にoutlook_calendar_viewで予定を取得してIDを確認してください。',
+          });
+        }
+        
+        const attendeesStr = args.attendees as string | undefined;
+        const attendees = attendeesStr ? attendeesStr.split(',').map(e => e.trim()) : undefined;
+        
+        const updateData: Record<string, unknown> = {};
+        if (args.subject) updateData.subject = args.subject;
+        if (args.startDateTime) updateData.startDateTime = args.startDateTime;
+        if (args.endDateTime) updateData.endDateTime = args.endDateTime;
+        if (args.timeZone) updateData.timeZone = args.timeZone;
+        if (args.location) updateData.location = args.location;
+        if (args.body) updateData.body = args.body;
+        if (attendees) updateData.attendees = attendees;
+        if (args.isAllDay !== undefined) updateData.isAllDay = args.isAllDay === 'true';
+        
+        const event = await updateCalendarEvent(eventId, updateData as Parameters<typeof updateCalendarEvent>[1]);
+        
+        return JSON.stringify({
+          success: true,
+          message: '予定を更新しました！',
+          event: {
+            id: event.id,
+            subject: event.subject,
+            start: event.start,
+            end: event.end,
+            location: event.location?.displayName,
+            webLink: event.webLink,
+          },
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `予定更新エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'outlook_calendar_delete': {
+      // Outlookカレンダー削除
+      if (!toolContext?.outlookEnabled) {
+        return JSON.stringify({
+          error: 'Outlook連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { deleteCalendarEvent, getCalendarEventById, isSignedIn } = await import('./outlook');
+        
+        if (!isSignedIn()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const eventId = args.eventId as string;
+        const confirmDelete = args.confirmDelete as string;
+        
+        if (!eventId) {
+          return JSON.stringify({
+            error: '予定のID（eventId）が指定されていません。先にoutlook_calendar_viewで予定を取得してIDを確認してください。',
+          });
+        }
+        
+        if (confirmDelete !== 'yes' && confirmDelete !== 'true') {
+          return JSON.stringify({
+            error: '削除を実行するには confirmDelete に "yes" または "true" を指定してください。',
+            hint: 'ユーザーに削除の確認を取ってから再度実行してください。',
+          });
+        }
+        
+        // 削除前に予定情報を取得（削除後の確認用）
+        let deletedEventInfo = null;
+        try {
+          const eventToDelete = await getCalendarEventById(eventId);
+          deletedEventInfo = {
+            subject: eventToDelete.subject,
+            start: eventToDelete.start,
+            end: eventToDelete.end,
+          };
+        } catch {
+          // 取得できなくても削除は試行
+        }
+        
+        await deleteCalendarEvent(eventId);
+        
+        return JSON.stringify({
+          success: true,
+          message: '予定を削除しました！',
+          deletedEvent: deletedEventInfo,
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `予定削除エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
       }
     }

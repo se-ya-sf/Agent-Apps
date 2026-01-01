@@ -30,7 +30,9 @@ import {
   Brain,
   Telescope,
   Calendar,
-  CalendarPlus
+  CalendarPlus,
+  CalendarCog,
+  CalendarX
 } from 'lucide-react';
 import type { ReasoningEffort } from '@/types';
 import MarkdownRenderer from './MarkdownRenderer';
@@ -42,6 +44,8 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   analyze_image: <Eye className="w-4 h-4" />,
   outlook_calendar_view: <Calendar className="w-4 h-4" />,
   outlook_calendar_create: <CalendarPlus className="w-4 h-4" />,
+  outlook_calendar_update: <CalendarCog className="w-4 h-4" />,
+  outlook_calendar_delete: <CalendarX className="w-4 h-4" />,
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -51,6 +55,8 @@ const TOOL_LABELS: Record<string, string> = {
   analyze_image: '画像分析',
   outlook_calendar_view: 'Outlook予定取得',
   outlook_calendar_create: 'Outlook予定作成',
+  outlook_calendar_update: 'Outlook予定変更',
+  outlook_calendar_delete: 'Outlook予定削除',
 };
 
 // Web検索結果から引用情報を抽出
