@@ -1,6 +1,7 @@
 {
-  "name": "webapp",
-  "version": "0.1.0",
+  "name": "ai-agent-app",
+  "version": "1.0.0",
+  "description": "AI Agent アプリ - Azure OpenAI / Google Gemini 対応のLLMチャットアプリケーション。エージェント機能、RAG、Outlook連携搭載。",
   "private": true,
   "scripts": {
     "dev": "next dev",

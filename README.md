@@ -1,6 +1,7 @@
-# AI Chat Agent - LLM Chat Application with Agent Capabilities
+# AI Agent App - 多機能LLMチャットアプリケーション
 
-ChatGPT風のモダンなUIを持つLLMチャットアプリケーションです。Azure OpenAIとGoogle Gemini APIに対応し、エージェント機能（Web検索、計算、画像分析など）を搭載しています。
+Azure OpenAI / Google Gemini 対応の多機能AIエージェントアプリケーションです。  
+Web検索、RAG（社内ドキュメント検索）、Outlookカレンダー連携など、実用的なエージェント機能を搭載しています。
 
 ![AI Chat Screenshot](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
@@ -66,6 +67,10 @@ API バージョン:
 | 🧮 Calculator | 数学計算を実行 | 「123 × 456 を計算して」 |
 | 🕐 Current Time | 現在日時を取得 | 「今何時？」 |
 | 🖼️ Image Analysis | 画像を分析・説明 | 画像をアップロードして「これは何？」 |
+| 📅 Outlook予定取得 | カレンダー予定を参照 | 「今週の予定を教えて」 |
+| 📅+ Outlook予定作成 | 新しい予定を作成 | 「明日14時から会議を入れて」 |
+| ⚙️📅 Outlook予定変更 | 既存の予定を更新 | 「その会議を15時に変更して」 |
+| ❌📅 Outlook予定削除 | 予定を削除 | 「その会議をキャンセルして」 |
 
 ## Getting Started
 
@@ -224,9 +229,14 @@ This is a standard Next.js application and can be deployed to any platform that 
 - [x] Calculator Tool
 - [x] Image Upload & Analysis
 - [x] Latest Models Support (GPT-5, Gemini 2.0, Claude)
+- [x] RAG (Azure AI Search 連携)
+- [x] Microsoft 365 / Outlook カレンダー連携
+- [x] 推論強度設定 (Reasoning Effort)
+- [x] Deep Research モード
+- [x] AI停止ボタン
+- [x] 引用・参照リンク表示
 - [ ] More Tools (Weather, Translation, etc.)
 - [ ] Voice Input/Output
-- [ ] RAG (Retrieval Augmented Generation)
 - [ ] Multi-Agent Collaboration
 
 ## License
@@ -235,6 +245,5 @@ MIT License
 
 ## Acknowledgments
 
-- UI/UX inspired by [ChatGPT[
 - Built with [Next.js](https://nextjs.org/)
-- Powered by [OpenAI](https://openai.com/) and [Google AI](https://ai.google.dev/)
+- Powered by [Azure OpenAI](https://azure.microsoft.com/products/ai-services/openai-service), [Google AI](https://ai.google.dev/), and [Microsoft Graph](https://developer.microsoft.com/graph)
