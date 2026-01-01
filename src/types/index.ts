@@ -86,6 +86,10 @@ export interface APIConfig {
   reasoningEffort?: ReasoningEffort;
   // Deep Research mode - 複数回の検索と分析を行う
   enableDeepResearch?: boolean;
+  // Microsoft Graph / Outlook Calendar 連携
+  enableOutlook?: boolean;
+  microsoftClientId?: string;
+  microsoftTenantId?: string;
 }
 
 export interface AppSettings {
@@ -196,3 +200,59 @@ export const isClaudeModel = (deploymentName?: string): boolean => {
   const name = deploymentName.toLowerCase();
   return name.includes('claude');
 };
+
+// Microsoft Graph / Outlook Calendar 連携
+export interface MicrosoftAuthConfig {
+  clientId: string;
+  tenantId: string;
+  redirectUri?: string;
+}
+
+// Outlookカレンダーイベント
+export interface OutlookCalendarEvent {
+  id: string;
+  subject: string;
+  start: {
+    dateTime: string;
+    timeZone: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone: string;
+  };
+  location?: {
+    displayName: string;
+  };
+  isAllDay?: boolean;
+  organizer?: {
+    emailAddress: {
+      name: string;
+      address: string;
+    };
+  };
+  attendees?: Array<{
+    emailAddress: {
+      name: string;
+      address: string;
+    };
+    type: string;
+    status: {
+      response: string;
+    };
+  }>;
+  bodyPreview?: string;
+  webLink?: string;
+  showAs?: string; // free, tentative, busy, oof, workingElsewhere, unknown
+}
+
+// カレンダー作成用の入力
+export interface CreateCalendarEventInput {
+  subject: string;
+  startDateTime: string; // ISO 8601
+  endDateTime: string;   // ISO 8601
+  timeZone?: string;
+  location?: string;
+  body?: string;
+  attendees?: string[];  // メールアドレスの配列
+  isAllDay?: boolean;
+}

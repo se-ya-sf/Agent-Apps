@@ -27,7 +27,11 @@ import {
   Eye,
   Globe,
   Database,
-  Info
+  Info,
+  Calendar,
+  LogIn,
+  LogOut,
+  User
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -36,10 +40,83 @@ export default function SettingsModal() {
   const [localConfig, setLocalConfig] = useState(apiConfig);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
+  
+  // Microsoft/Outlook認証状態
+  const [msftAuthStatus, setMsftAuthStatus] = useState<'idle' | 'signing-in' | 'signed-in' | 'error'>('idle');
+  const [msftUserName, setMsftUserName] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalConfig(apiConfig);
   }, [apiConfig, isSettingsOpen]);
+
+  // Microsoft認証状態の確認
+  useEffect(() => {
+    const checkMsftAuth = async () => {
+      if (localConfig.enableOutlook && localConfig.microsoftClientId && localConfig.microsoftTenantId) {
+        try {
+          const { initializeMsal, getCurrentAccount, getUserProfile, isSignedIn } = await import('@/lib/outlook');
+          await initializeMsal(localConfig.microsoftClientId, localConfig.microsoftTenantId);
+          
+          if (isSignedIn()) {
+            const account = getCurrentAccount();
+            if (account) {
+              setMsftAuthStatus('signed-in');
+              try {
+                const profile = await getUserProfile();
+                setMsftUserName(profile.displayName || account.username);
+              } catch {
+                setMsftUserName(account.username);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('MSAL init error:', error);
+        }
+      }
+    };
+    checkMsftAuth();
+  }, [localConfig.enableOutlook, localConfig.microsoftClientId, localConfig.microsoftTenantId]);
+
+  // Microsoftサインイン
+  const handleMsftSignIn = async () => {
+    if (!localConfig.microsoftClientId || !localConfig.microsoftTenantId) {
+      alert('Client ID と Tenant ID を入力してください');
+      return;
+    }
+    
+    setMsftAuthStatus('signing-in');
+    try {
+      const { initializeMsal, signInWithMicrosoft, getUserProfile } = await import('@/lib/outlook');
+      await initializeMsal(localConfig.microsoftClientId, localConfig.microsoftTenantId);
+      const account = await signInWithMicrosoft();
+      
+      if (account) {
+        setMsftAuthStatus('signed-in');
+        try {
+          const profile = await getUserProfile();
+          setMsftUserName(profile.displayName || account.username);
+        } catch {
+          setMsftUserName(account.username);
+        }
+      }
+    } catch (error) {
+      console.error('Microsoft sign-in error:', error);
+      setMsftAuthStatus('error');
+      alert(`サインインエラー: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Microsoftサインアウト
+  const handleMsftSignOut = async () => {
+    try {
+      const { signOutFromMicrosoft } = await import('@/lib/outlook');
+      await signOutFromMicrosoft();
+      setMsftAuthStatus('idle');
+      setMsftUserName(null);
+    } catch (error) {
+      console.error('Microsoft sign-out error:', error);
+    }
+  };
 
   const handleProviderChange = (provider: APIProvider) => {
     setLocalConfig((prev) => ({ ...prev, provider }));
@@ -597,6 +674,160 @@ export default function SettingsModal() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   事前に Azure AI Search でインデックスを作成しておいてください
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Microsoft / Outlook Calendar Integration */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Microsoft 365 連携 (Outlook カレンダー)
+            </label>
+            <button
+              onClick={() => setLocalConfig((prev) => ({ ...prev, enableOutlook: !prev.enableOutlook }))}
+              className={`
+                w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all
+                ${localConfig.enableOutlook
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
+                }
+              `}
+            >
+              <div className={`
+                w-12 h-12 rounded-xl flex items-center justify-center
+                ${localConfig.enableOutlook 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                }
+              `}>
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium ${localConfig.enableOutlook ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                    Outlook カレンダー連携
+                  </span>
+                  <span className={`
+                    text-xs px-2 py-0.5 rounded-full
+                    ${localConfig.enableOutlook 
+                      ? 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-300' 
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    }
+                  `}>
+                    {localConfig.enableOutlook ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Microsoft Graph API でカレンダー予定の参照・作成
+                </p>
+              </div>
+            </button>
+          </div>
+
+          {/* Microsoft Configuration */}
+          {localConfig.enableOutlook && (
+            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <ExternalLink className="w-4 h-4" />
+                <a 
+                  href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hover:text-blue-500 underline"
+                >
+                  Azure Entra ID でアプリを登録
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Key className="w-4 h-4" />
+                  Client ID (Application ID)
+                </label>
+                <input
+                  type="text"
+                  value={localConfig.microsoftClientId || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, microsoftClientId: e.target.value }))}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Server className="w-4 h-4" />
+                  Tenant ID (Directory ID)
+                </label>
+                <input
+                  type="text"
+                  value={localConfig.microsoftTenantId || ''}
+                  onChange={(e) => setLocalConfig((prev) => ({ ...prev, microsoftTenantId: e.target.value }))}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+              </div>
+
+              {/* Microsoft Sign-in Status */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                {msftAuthStatus === 'signed-in' ? (
+                  <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                        <User className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                          サインイン済み
+                        </p>
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          {msftUserName || 'Microsoft Account'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleMsftSignOut}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      サインアウト
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleMsftSignIn}
+                    disabled={msftAuthStatus === 'signing-in' || !localConfig.microsoftClientId || !localConfig.microsoftTenantId}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-xl font-medium transition-colors disabled:cursor-not-allowed"
+                  >
+                    {msftAuthStatus === 'signing-in' ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        サインイン中...
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="w-5 h-5" />
+                        Microsoft でサインイン
+                      </>
+                    )}
+                  </button>
+                )}
+                
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-blue-700 dark:text-blue-300">
+                      <p className="font-medium mb-1">必要な API 権限:</p>
+                      <ul className="list-disc list-inside space-y-0.5 text-blue-600 dark:text-blue-400">
+                        <li>User.Read（プロフィール読み取り）</li>
+                        <li>Calendars.Read（予定の参照）</li>
+                        <li>Calendars.ReadWrite（予定の作成）</li>
+                      </ul>
+                      <p className="mt-2">
+                        リダイレクト URI: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}</code>
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

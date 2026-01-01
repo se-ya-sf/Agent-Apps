@@ -64,11 +64,88 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
 ];
 
+// Outlook Calendar Tools（Microsoft認証時のみ有効）
+export const OUTLOOK_TOOLS: ToolDefinition[] = [
+  {
+    name: 'outlook_calendar_view',
+    description: 'Outlook/Microsoft 365 カレンダーから指定期間の予定を取得します。ユーザーのスケジュール、会議、予定を確認する際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        startDateTime: {
+          type: 'string',
+          description: '開始日時（ISO 8601形式、例: 2026-01-01T00:00:00）',
+        },
+        endDateTime: {
+          type: 'string',
+          description: '終了日時（ISO 8601形式、例: 2026-01-07T23:59:59）',
+        },
+        timeZone: {
+          type: 'string',
+          description: 'タイムゾーン（例: Asia/Tokyo）。デフォルトはAsia/Tokyo',
+        },
+        maxResults: {
+          type: 'number',
+          description: '取得する最大件数。デフォルトは20件、最大50件',
+        },
+      },
+      required: ['startDateTime', 'endDateTime'],
+    },
+  },
+  {
+    name: 'outlook_calendar_create',
+    description: 'Outlook/Microsoft 365 カレンダーに新しい予定を作成します。会議のスケジュール、リマインダーの設定に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        subject: {
+          type: 'string',
+          description: '予定のタイトル/件名',
+        },
+        startDateTime: {
+          type: 'string',
+          description: '開始日時（ISO 8601形式、例: 2026-01-15T14:00:00）',
+        },
+        endDateTime: {
+          type: 'string',
+          description: '終了日時（ISO 8601形式、例: 2026-01-15T15:00:00）',
+        },
+        timeZone: {
+          type: 'string',
+          description: 'タイムゾーン（例: Asia/Tokyo）。デフォルトはAsia/Tokyo',
+        },
+        location: {
+          type: 'string',
+          description: '場所（オプション）',
+        },
+        body: {
+          type: 'string',
+          description: '予定の説明/本文（オプション）',
+        },
+        attendees: {
+          type: 'string',
+          description: '参加者のメールアドレス（カンマ区切り、例: user1@example.com,user2@example.com）',
+        },
+        isAllDay: {
+          type: 'string',
+          description: '終日予定かどうか（true/false）',
+        },
+      },
+      required: ['subject', 'startDateTime', 'endDateTime'],
+    },
+  },
+];
+
 // Search configuration
 interface SearchConfig {
   provider: SearchProvider;
   tavilyApiKey?: string;
   braveApiKey?: string;
+}
+
+// Tool execution context（Outlook等の追加コンテキスト）
+export interface ToolContext {
+  outlookEnabled?: boolean;
 }
 
 // Tavily Search API (recommended for AI agents)
@@ -326,7 +403,8 @@ export function calculate(expression: string): string {
 export async function executeTool(
   toolName: string, 
   args: Record<string, unknown>,
-  searchConfig?: SearchConfig
+  searchConfig?: SearchConfig,
+  toolContext?: ToolContext
 ): Promise<string> {
   switch (toolName) {
     case 'web_search': {
@@ -351,14 +429,106 @@ export async function executeTool(
       return 'IMAGE_ANALYSIS_REQUESTED';
     }
     
+    case 'outlook_calendar_view': {
+      // Outlookカレンダー参照
+      if (!toolContext?.outlookEnabled) {
+        return JSON.stringify({
+          error: 'Outlook連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        // 動的インポート（クライアントサイドのみ）
+        const { getCalendarEvents, formatCalendarEventsForLLM, isSignedIn } = await import('./outlook');
+        
+        if (!isSignedIn()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const startDateTime = args.startDateTime as string;
+        const endDateTime = args.endDateTime as string;
+        const timeZone = (args.timeZone as string) || 'Asia/Tokyo';
+        const maxResults = Math.min(Number(args.maxResults) || 20, 50);
+        
+        const events = await getCalendarEvents(startDateTime, endDateTime, timeZone, maxResults);
+        const formattedEvents = formatCalendarEventsForLLM(events);
+        
+        return JSON.stringify({
+          success: true,
+          count: events.length,
+          period: { start: startDateTime, end: endDateTime },
+          events: formattedEvents,
+          rawEvents: events, // LLMが詳細を参照できるように
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `カレンダー取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'outlook_calendar_create': {
+      // Outlookカレンダー作成
+      if (!toolContext?.outlookEnabled) {
+        return JSON.stringify({
+          error: 'Outlook連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { createCalendarEvent, isSignedIn } = await import('./outlook');
+        
+        if (!isSignedIn()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const attendeesStr = args.attendees as string | undefined;
+        const attendees = attendeesStr ? attendeesStr.split(',').map(e => e.trim()) : undefined;
+        
+        const event = await createCalendarEvent({
+          subject: args.subject as string,
+          startDateTime: args.startDateTime as string,
+          endDateTime: args.endDateTime as string,
+          timeZone: (args.timeZone as string) || 'Asia/Tokyo',
+          location: args.location as string | undefined,
+          body: args.body as string | undefined,
+          attendees,
+          isAllDay: args.isAllDay === 'true',
+        });
+        
+        return JSON.stringify({
+          success: true,
+          message: '予定を作成しました！',
+          event: {
+            id: event.id,
+            subject: event.subject,
+            start: event.start,
+            end: event.end,
+            location: event.location?.displayName,
+            webLink: event.webLink,
+          },
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `予定作成エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
     default:
       return `Unknown tool: ${toolName}`;
   }
 }
 
 // Convert tools to OpenAI/Azure format
-export function getOpenAITools() {
-  return AVAILABLE_TOOLS.map(tool => ({
+export function getOpenAITools(includeOutlook: boolean = false) {
+  const tools = includeOutlook 
+    ? [...AVAILABLE_TOOLS, ...OUTLOOK_TOOLS]
+    : AVAILABLE_TOOLS;
+    
+  return tools.map(tool => ({
     type: 'function' as const,
     function: {
       name: tool.name,
@@ -369,9 +539,13 @@ export function getOpenAITools() {
 }
 
 // Convert tools to Gemini format
-export function getGeminiTools() {
+export function getGeminiTools(includeOutlook: boolean = false) {
+  const tools = includeOutlook 
+    ? [...AVAILABLE_TOOLS, ...OUTLOOK_TOOLS]
+    : AVAILABLE_TOOLS;
+    
   return [{
-    functionDeclarations: AVAILABLE_TOOLS.map(tool => ({
+    functionDeclarations: tools.map(tool => ({
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,

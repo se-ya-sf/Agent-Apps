@@ -347,9 +347,10 @@ async function sendAzureClaude(
     requestBody.system = systemMessage.content;
   }
 
-  // エージェントモード時のツール追加
+  // エージェントモード時のツール追加（Outlook有効時はOutlookツールも含む）
   if (options.enableAgent) {
-    const tools = getOpenAITools();
+    const includeOutlook = config.enableOutlook === true;
+    const tools = getOpenAITools(includeOutlook);
     requestBody.tools = tools.map(tool => ({
       name: tool.function.name,
       description: tool.function.description,
@@ -547,6 +548,12 @@ async function sendAzureOpenAI(
     
     let ragSystemPrompt: string;
     
+    // Outlook連携が有効かどうか
+    const outlookEnabled = config.enableOutlook === true;
+    const outlookToolsDesc = outlookEnabled ? `
+- outlook_calendar_view: Outlook カレンダーの予定を取得する
+- outlook_calendar_create: Outlook カレンダーに新しい予定を作成する` : '';
+
     if (ragSearchResult.hasResults) {
       // インデックスに情報がある場合
       ragSystemPrompt = `
@@ -556,7 +563,11 @@ async function sendAzureOpenAI(
 あなたは以下のツールを使用できます：
 - web_search: インターネット検索を実行する
 - calculator: 計算を実行する
-- get_current_time: 現在時刻を取得する
+- get_current_time: 現在時刻を取得する${outlookToolsDesc}
+${outlookEnabled ? `
+## カレンダー・予定に関する質問
+ユーザーが予定、スケジュール、空き時間、会議について質問した場合は、**必ず outlook_calendar_view ツールを使用**してください。
+予定の作成を依頼された場合は outlook_calendar_create を使用してください。` : ''}
 
 ## 回答の優先順位
 
@@ -588,7 +599,7 @@ ${ragSearchResult.context}
 あなたは以下のツールを使用できます：
 - web_search: インターネット検索を実行する
 - calculator: 計算を実行する
-- get_current_time: 現在時刻を取得する
+- get_current_time: 現在時刻を取得する${outlookToolsDesc}
 
 ## 状況
 社内ドキュメント（Azure AI Search インデックス）を検索しましたが、該当する情報が見つかりませんでした。
@@ -596,6 +607,10 @@ ${ragSearchResult.context}
 ## 回答方法
 1. 「社内ドキュメントには該当する情報が見つかりませんでした。」と伝える
 2. 「Web検索で調べましょうか？」と提案する
+${outlookEnabled ? `
+## カレンダー・予定に関する質問
+ユーザーが予定、スケジュール、空き時間、会議について質問した場合は、**必ず outlook_calendar_view ツールを使用**してください。
+予定の作成を依頼された場合は outlook_calendar_create を使用してください。` : ''}
 
 ## ユーザーがWeb検索を要求した場合
 以下のような要求があった場合は、**必ず web_search ツールを呼び出してください**：
@@ -639,9 +654,10 @@ ${ragSearchResult.context}
     requestBody.max_tokens = 4096;
   }
   
-  // Add tools if agent mode is enabled
+  // Add tools if agent mode is enabled（Outlook有効時はOutlookツールも含む）
   if (options.enableAgent) {
-    requestBody.tools = getOpenAITools();
+    const includeOutlook = config.enableOutlook === true;
+    requestBody.tools = getOpenAITools(includeOutlook);
     requestBody.tool_choice = 'auto';
   }
 

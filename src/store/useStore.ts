@@ -76,6 +76,10 @@ export const useStore = create<AppState>()(
         azureSearchEndpoint: '',
         azureSearchApiKey: '',
         azureSearchIndexName: '',
+        // Microsoft / Outlook settings
+        enableOutlook: false,
+        microsoftClientId: '',
+        microsoftTenantId: '',
       },
       
       isSidebarOpen: true,
