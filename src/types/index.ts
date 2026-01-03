@@ -90,6 +90,16 @@ export interface APIConfig {
   enableOutlook?: boolean;
   microsoftClientId?: string;
   microsoftTenantId?: string;
+  // Private RAG (Azure Blob + AI Search)
+  enablePrivateRAG?: boolean;
+  privateRAGBlobUrl?: string;           // Blob Storage URL
+  privateRAGBlobContainer?: string;     // コンテナ名
+  privateRAGBlobSasToken?: string;      // SAS Token
+  privateRAGSearchEndpoint?: string;    // AI Search エンドポイント
+  privateRAGSearchApiKey?: string;      // AI Search API キー
+  privateRAGIndexName?: string;         // インデックス名
+  privateRAGIndexerName?: string;       // インデクサー名
+  privateRAGUserId?: string;            // ユーザーID
 }
 
 export interface AppSettings {
@@ -267,4 +277,60 @@ export interface UpdateCalendarEventInput {
   body?: string;
   attendees?: string[];   // メールアドレスの配列
   isAllDay?: boolean;
+}
+
+// ============================================
+// Private RAG (Azure Blob + AI Search)
+// ============================================
+
+// Private RAG 設定
+export interface PrivateRAGConfig {
+  // Azure Blob Storage
+  blobStorageUrl: string;        // Blob Storage URL (SAS URL推奨)
+  blobContainerName: string;     // コンテナ名
+  blobSasToken?: string;         // SAS Token (URLに含まれていない場合)
+  
+  // Azure AI Search
+  searchEndpoint: string;        // AI Search エンドポイント
+  searchApiKey: string;          // AI Search API キー
+  searchIndexName: string;       // インデックス名
+  searchIndexerName: string;     // インデクサー名
+  
+  // ユーザー識別
+  userId: string;                // ユーザーID (メタデータ用)
+}
+
+// アップロードされたドキュメント情報
+export interface PrivateRAGDocument {
+  id: string;                    // doc_id (ユニーク)
+  fileName: string;              // ファイル名
+  fileSize: number;              // ファイルサイズ (bytes)
+  mimeType: string;              // MIMEタイプ
+  blobUrl: string;               // Blob URL
+  uploadedAt: Date;              // アップロード日時
+  userId: string;                // ユーザーID
+  indexingStatus: 'pending' | 'indexing' | 'indexed' | 'failed';  // インデクシング状態
+  metadata?: Record<string, string>;  // 追加メタデータ
+}
+
+// インデクサー実行結果
+export interface IndexerRunResult {
+  status: 'success' | 'inProgress' | 'failed';
+  lastRunTime?: Date;
+  itemsProcessed?: number;
+  itemsFailed?: number;
+  errorMessage?: string;
+}
+
+// Private RAG 検索結果
+export interface PrivateRAGSearchResult {
+  hasResults: boolean;
+  documents: Array<{
+    docId: string;
+    fileName: string;
+    content: string;
+    score: number;
+    highlights?: string[];
+  }>;
+  searchPerformed: boolean;
 }

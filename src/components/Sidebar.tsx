@@ -10,8 +10,10 @@ import {
   X,
   Sparkles,
   Pin,
-  PinOff
+  PinOff,
+  Database
 } from 'lucide-react';
+import Link from 'next/link';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -217,8 +219,18 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Settings Button */}
-        <div className="p-4 border-t border-purple-700/50">
+        {/* Footer Buttons */}
+        <div className="p-4 border-t border-purple-700/50 space-y-2">
+          {/* Private RAG */}
+          <Link
+            href="/private-rag"
+            className="w-full flex items-center gap-3 px-4 py-3 text-purple-200 hover:text-white hover:bg-purple-700/50 rounded-xl transition-all"
+          >
+            <Database className="w-5 h-5" />
+            <span className="font-medium">Private RAG</span>
+          </Link>
+          
+          {/* Settings Button */}
           <button
             onClick={toggleSettings}
             className="w-full flex items-center gap-3 px-4 py-3 text-purple-200 hover:text-white hover:bg-purple-700/50 rounded-xl transition-all"

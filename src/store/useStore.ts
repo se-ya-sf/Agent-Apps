@@ -80,6 +80,16 @@ export const useStore = create<AppState>()(
         enableOutlook: false,
         microsoftClientId: '',
         microsoftTenantId: '',
+        // Private RAG settings
+        enablePrivateRAG: false,
+        privateRAGBlobUrl: '',
+        privateRAGBlobContainer: '',
+        privateRAGBlobSasToken: '',
+        privateRAGSearchEndpoint: '',
+        privateRAGSearchApiKey: '',
+        privateRAGIndexName: '',
+        privateRAGIndexerName: '',
+        privateRAGUserId: 'user001',
       },
       
       isSidebarOpen: true,
