@@ -82,9 +82,10 @@ export async function getChannelMessages(
   accessToken?: string
 ): Promise<TeamsMessage[]> {
   const token = accessToken || await getAccessToken();
+  // 注意: Teams Channel Messages API は $orderby をサポートしていない
+  // メッセージは createdDateTime の降順で返される（最新が先頭）
   const params = new URLSearchParams({
     $top: Math.min(maxResults, 50).toString(),
-    $orderby: 'createdDateTime desc',
   });
   
   const response = await callGraphApi<{ value: TeamsMessage[] }>(
