@@ -1,7 +1,7 @@
 # AI Agent App - 多機能LLMチャットアプリケーション
 
 Azure OpenAI / Google Gemini 対応の多機能AIエージェントアプリケーションです。  
-Web検索、RAG（社内ドキュメント検索）、Outlookカレンダー連携など、実用的なエージェント機能を搭載しています。
+Web検索、RAG（社内ドキュメント検索）、Outlookカレンダー連携、Microsoft Teams連携など、実用的なエージェント機能を搭載しています。
 
 ![AI Chat Screenshot](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript)
@@ -71,6 +71,11 @@ API バージョン:
 | 📅+ Outlook予定作成 | 新しい予定を作成 | 「明日14時から会議を入れて」 |
 | ⚙️📅 Outlook予定変更 | 既存の予定を更新 | 「その会議を15時に変更して」 |
 | ❌📅 Outlook予定削除 | 予定を削除 | 「その会議をキャンセルして」 |
+| 💬 Teams検索 | Teamsメッセージを横断検索 | 「プロジェクトXについてのTeamsメッセージを検索して」 |
+| 📨 Teamsチャネル参照 | チャネルのメッセージ取得 | 「マーケティングチームの最新メッセージは？」 |
+| 🧵 Teamsスレッド参照 | メッセージの返信を取得 | 「そのメッセージのスレッドを見せて」 |
+| 👥 Teams一覧 | 参加チーム・チャネル一覧 | 「参加しているTeamsを教えて」 |
+| 💬 Teamsチャット | 1対1/グループチャット参照 | 「最近のチャットを見せて」 |
 
 ## Getting Started
 
@@ -231,6 +236,7 @@ This is a standard Next.js application and can be deployed to any platform that 
 - [x] Latest Models Support (GPT-5, Gemini 2.0, Claude)
 - [x] RAG (Azure AI Search 連携)
 - [x] Microsoft 365 / Outlook カレンダー連携
+- [x] Microsoft Teams メッセージ検索・参照
 - [x] 推論強度設定 (Reasoning Effort)
 - [x] Deep Research モード
 - [x] AI停止ボタン

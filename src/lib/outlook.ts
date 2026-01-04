@@ -7,11 +7,17 @@ import type { OutlookCalendarEvent, CreateCalendarEventInput, UpdateCalendarEven
 let msalInstance: PublicClientApplication | null = null;
 let currentAccount: AccountInfo | null = null;
 
-// Graph APIのスコープ
+// Graph APIのスコープ（Calendar + Teams）
 const GRAPH_SCOPES = [
   'User.Read',
   'Calendars.Read',
   'Calendars.ReadWrite',
+  // Teams アクセス用
+  'Team.ReadBasic.All',
+  'Channel.ReadBasic.All',
+  'ChannelMessage.Read.All',
+  'Chat.Read',
+  'Chat.ReadBasic',
 ];
 
 // MSALインスタンスの初期化
@@ -78,7 +84,7 @@ export async function signOutFromMicrosoft(): Promise<void> {
 }
 
 // アクセストークンの取得
-async function getAccessToken(): Promise<string> {
+export async function getAccessToken(): Promise<string> {
   if (!msalInstance) {
     throw new Error('MSAL is not initialized');
   }
