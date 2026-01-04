@@ -200,6 +200,127 @@ export const OUTLOOK_TOOLS: ToolDefinition[] = [
   },
 ];
 
+// Microsoft Teams Tools（Microsoft認証時のみ有効）
+export const TEAMS_TOOLS: ToolDefinition[] = [
+  {
+    name: 'teams_search_messages',
+    description: 'Microsoft Teamsの全チャネルメッセージを横断検索します。キーワードを指定して、ユーザーが参加している全てのチーム・チャネルからメッセージを検索します。過去の会話、スレッド情報、議事録などを探す際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        keyword: {
+          type: 'string',
+          description: '検索するキーワード（メッセージ本文と件名を検索）',
+        },
+        maxResultsPerChannel: {
+          type: 'number',
+          description: '各チャネルごとの最大取得件数。デフォルトは20件',
+        },
+      },
+      required: ['keyword'],
+    },
+  },
+  {
+    name: 'teams_get_channel_messages',
+    description: '特定のチームとチャネルからメッセージを取得します。チャネル内の最新メッセージや会話履歴を確認する際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        teamId: {
+          type: 'string',
+          description: 'チームのID（teams_list_teamsで取得）',
+        },
+        channelId: {
+          type: 'string',
+          description: 'チャネルのID（teams_list_channelsで取得）',
+        },
+        maxResults: {
+          type: 'number',
+          description: '取得する最大件数。デフォルトは50件、最大50件',
+        },
+      },
+      required: ['teamId', 'channelId'],
+    },
+  },
+  {
+    name: 'teams_get_message_replies',
+    description: 'Teamsメッセージのスレッド（返信）を取得します。特定のメッセージに対する返信や議論の流れを確認する際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        teamId: {
+          type: 'string',
+          description: 'チームのID',
+        },
+        channelId: {
+          type: 'string',
+          description: 'チャネルのID',
+        },
+        messageId: {
+          type: 'string',
+          description: 'メッセージのID（teams_get_channel_messagesで取得）',
+        },
+      },
+      required: ['teamId', 'channelId', 'messageId'],
+    },
+  },
+  {
+    name: 'teams_list_teams',
+    description: 'ユーザーが参加しているTeamsチームの一覧を取得します。チームの名前やIDを確認する際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'teams_list_channels',
+    description: '特定のチームのチャネル一覧を取得します。チームに属するチャネルを確認する際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        teamId: {
+          type: 'string',
+          description: 'チームのID（teams_list_teamsで取得）',
+        },
+      },
+      required: ['teamId'],
+    },
+  },
+  {
+    name: 'teams_get_chats',
+    description: 'ユーザーのTeamsチャット（1対1、グループチャット）の一覧を取得します。最近のチャットや会話相手を確認する際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        maxResults: {
+          type: 'number',
+          description: '取得する最大件数。デフォルトは50件、最大50件',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'teams_get_chat_messages',
+    description: '特定のチャットからメッセージを取得します。1対1チャットやグループチャットの履歴を確認する際に使用してください。',
+    parameters: {
+      type: 'object',
+      properties: {
+        chatId: {
+          type: 'string',
+          description: 'チャットのID（teams_get_chatsで取得）',
+        },
+        maxResults: {
+          type: 'number',
+          description: '取得する最大件数。デフォルトは50件、最大50件',
+        },
+      },
+      required: ['chatId'],
+    },
+  },
+];
+
 // Search configuration
 interface SearchConfig {
   provider: SearchProvider;
@@ -210,6 +331,7 @@ interface SearchConfig {
 // Tool execution context（Outlook等の追加コンテキスト）
 export interface ToolContext {
   outlookEnabled?: boolean;
+  teamsEnabled?: boolean;
 }
 
 // Tavily Search API (recommended for AI agents)
@@ -697,16 +819,261 @@ export async function executeTool(
       }
     }
     
+    // ============================================
+    // Microsoft Teams Tools
+    // ============================================
+    
+    case 'teams_search_messages': {
+      if (!toolContext?.teamsEnabled) {
+        return JSON.stringify({
+          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { searchAllTeamsMessages, formatSearchResultsForLLM, isTeamsEnabled } = await import('./teams');
+        
+        if (!isTeamsEnabled()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const keyword = args.keyword as string;
+        const maxResultsPerChannel = Math.min(Number(args.maxResultsPerChannel) || 20, 50);
+        
+        const results = await searchAllTeamsMessages(keyword, maxResultsPerChannel);
+        const formattedResults = formatSearchResultsForLLM(results);
+        
+        return JSON.stringify({
+          success: true,
+          keyword,
+          totalChannelsWithResults: results.length,
+          results: formattedResults,
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `Teams検索エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'teams_get_channel_messages': {
+      if (!toolContext?.teamsEnabled) {
+        return JSON.stringify({
+          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { getChannelMessages, formatTeamsMessagesForLLM, isTeamsEnabled } = await import('./teams');
+        
+        if (!isTeamsEnabled()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const teamId = args.teamId as string;
+        const channelId = args.channelId as string;
+        const maxResults = Math.min(Number(args.maxResults) || 50, 50);
+        
+        const messages = await getChannelMessages(teamId, channelId, maxResults);
+        const formattedMessages = formatTeamsMessagesForLLM(messages);
+        
+        return JSON.stringify({
+          success: true,
+          count: messages.length,
+          messages: formattedMessages,
+          rawMessages: messages,
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `チャネルメッセージ取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'teams_get_message_replies': {
+      if (!toolContext?.teamsEnabled) {
+        return JSON.stringify({
+          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { getMessageReplies, formatTeamsMessagesForLLM, isTeamsEnabled } = await import('./teams');
+        
+        if (!isTeamsEnabled()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const teamId = args.teamId as string;
+        const channelId = args.channelId as string;
+        const messageId = args.messageId as string;
+        
+        const replies = await getMessageReplies(teamId, channelId, messageId);
+        const formattedReplies = formatTeamsMessagesForLLM(replies, { includeReplies: true });
+        
+        return JSON.stringify({
+          success: true,
+          count: replies.length,
+          replies: formattedReplies,
+          rawReplies: replies,
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `スレッド取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'teams_list_teams': {
+      if (!toolContext?.teamsEnabled) {
+        return JSON.stringify({
+          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { getJoinedTeams, isTeamsEnabled } = await import('./teams');
+        
+        if (!isTeamsEnabled()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const teams = await getJoinedTeams();
+        
+        return JSON.stringify({
+          success: true,
+          count: teams.length,
+          teams: teams.map(t => ({
+            id: t.id,
+            name: t.displayName,
+            description: t.description,
+          })),
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `チーム一覧取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'teams_list_channels': {
+      if (!toolContext?.teamsEnabled) {
+        return JSON.stringify({
+          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { getTeamChannels, isTeamsEnabled } = await import('./teams');
+        
+        if (!isTeamsEnabled()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const teamId = args.teamId as string;
+        const channels = await getTeamChannels(teamId);
+        
+        return JSON.stringify({
+          success: true,
+          count: channels.length,
+          channels: channels.map(c => ({
+            id: c.id,
+            name: c.displayName,
+            description: c.description,
+          })),
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `チャネル一覧取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'teams_get_chats': {
+      if (!toolContext?.teamsEnabled) {
+        return JSON.stringify({
+          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { getUserChats, isTeamsEnabled } = await import('./teams');
+        
+        if (!isTeamsEnabled()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const maxResults = Math.min(Number(args.maxResults) || 50, 50);
+        const chats = await getUserChats(maxResults);
+        
+        return JSON.stringify({
+          success: true,
+          count: chats.length,
+          chats: chats.map(c => ({
+            id: c.id,
+            topic: c.topic || '(トピックなし)',
+            chatType: c.chatType,
+            lastUpdated: c.lastUpdatedDateTime,
+            members: c.members?.map(m => m.displayName).join(', '),
+          })),
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `チャット一覧取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
+    case 'teams_get_chat_messages': {
+      if (!toolContext?.teamsEnabled) {
+        return JSON.stringify({
+          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
+        });
+      }
+      try {
+        const { getChatMessages, formatTeamsMessagesForLLM, isTeamsEnabled } = await import('./teams');
+        
+        if (!isTeamsEnabled()) {
+          return JSON.stringify({
+            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
+          });
+        }
+        
+        const chatId = args.chatId as string;
+        const maxResults = Math.min(Number(args.maxResults) || 50, 50);
+        
+        const messages = await getChatMessages(chatId, maxResults);
+        const formattedMessages = formatTeamsMessagesForLLM(messages);
+        
+        return JSON.stringify({
+          success: true,
+          count: messages.length,
+          messages: formattedMessages,
+          rawMessages: messages,
+        }, null, 2);
+      } catch (error) {
+        return JSON.stringify({
+          error: `チャットメッセージ取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+    
     default:
       return `Unknown tool: ${toolName}`;
   }
 }
 
 // Convert tools to OpenAI/Azure format
-export function getOpenAITools(includeOutlook: boolean = false) {
-  const tools = includeOutlook 
-    ? [...AVAILABLE_TOOLS, ...OUTLOOK_TOOLS]
-    : AVAILABLE_TOOLS;
+export function getOpenAITools(includeOutlook: boolean = false, includeTeams: boolean = false) {
+  let tools = [...AVAILABLE_TOOLS];
+  if (includeOutlook) tools = [...tools, ...OUTLOOK_TOOLS];
+  if (includeTeams) tools = [...tools, ...TEAMS_TOOLS];
     
   return tools.map(tool => ({
     type: 'function' as const,
@@ -719,10 +1086,10 @@ export function getOpenAITools(includeOutlook: boolean = false) {
 }
 
 // Convert tools to Gemini format
-export function getGeminiTools(includeOutlook: boolean = false) {
-  const tools = includeOutlook 
-    ? [...AVAILABLE_TOOLS, ...OUTLOOK_TOOLS]
-    : AVAILABLE_TOOLS;
+export function getGeminiTools(includeOutlook: boolean = false, includeTeams: boolean = false) {
+  let tools = [...AVAILABLE_TOOLS];
+  if (includeOutlook) tools = [...tools, ...OUTLOOK_TOOLS];
+  if (includeTeams) tools = [...tools, ...TEAMS_TOOLS];
     
   return [{
     functionDeclarations: tools.map(tool => ({

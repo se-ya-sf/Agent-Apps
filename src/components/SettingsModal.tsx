@@ -31,7 +31,8 @@ import {
   Calendar,
   LogIn,
   LogOut,
-  User
+  User,
+  MessageSquare
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -52,7 +53,7 @@ export default function SettingsModal() {
   // Microsoft認証状態の確認
   useEffect(() => {
     const checkMsftAuth = async () => {
-      if (localConfig.enableOutlook && localConfig.microsoftClientId && localConfig.microsoftTenantId) {
+      if ((localConfig.enableOutlook || localConfig.enableTeams) && localConfig.microsoftClientId && localConfig.microsoftTenantId) {
         try {
           const { initializeMsal, getCurrentAccount, getUserProfile, isSignedIn } = await import('@/lib/outlook');
           await initializeMsal(localConfig.microsoftClientId, localConfig.microsoftTenantId);
@@ -75,7 +76,7 @@ export default function SettingsModal() {
       }
     };
     checkMsftAuth();
-  }, [localConfig.enableOutlook, localConfig.microsoftClientId, localConfig.microsoftTenantId]);
+  }, [localConfig.enableOutlook, localConfig.enableTeams, localConfig.microsoftClientId, localConfig.microsoftTenantId]);
 
   // Microsoftサインイン
   const handleMsftSignIn = async () => {
@@ -724,8 +725,54 @@ export default function SettingsModal() {
             </button>
           </div>
 
+          {/* Microsoft Teams Integration */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Microsoft Teams 連携
+            </label>
+            <button
+              onClick={() => setLocalConfig((prev) => ({ ...prev, enableTeams: !prev.enableTeams }))}
+              className={`
+                w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all
+                ${localConfig.enableTeams
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-purple-300'
+                }
+              `}
+            >
+              <div className={`
+                w-12 h-12 rounded-xl flex items-center justify-center
+                ${localConfig.enableTeams 
+                  ? 'bg-purple-500 text-white' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                }
+              `}>
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium ${localConfig.enableTeams ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                    Teams メッセージ検索
+                  </span>
+                  <span className={`
+                    text-xs px-2 py-0.5 rounded-full
+                    ${localConfig.enableTeams 
+                      ? 'bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300' 
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    }
+                  `}>
+                    {localConfig.enableTeams ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  チャネルメッセージ、チャット、スレッド検索
+                </p>
+              </div>
+            </button>
+          </div>
+
           {/* Microsoft Configuration */}
-          {localConfig.enableOutlook && (
+          {(localConfig.enableOutlook || localConfig.enableTeams) && (
             <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
               <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 <ExternalLink className="w-4 h-4" />
@@ -819,8 +866,21 @@ export default function SettingsModal() {
                       <p className="font-medium mb-1">必要な API 権限:</p>
                       <ul className="list-disc list-inside space-y-0.5 text-blue-600 dark:text-blue-400">
                         <li>User.Read（プロフィール読み取り）</li>
-                        <li>Calendars.Read（予定の参照）</li>
-                        <li>Calendars.ReadWrite（予定の作成）</li>
+                        {localConfig.enableOutlook && (
+                          <>
+                            <li>Calendars.Read（予定の参照）</li>
+                            <li>Calendars.ReadWrite（予定の作成）</li>
+                          </>
+                        )}
+                        {localConfig.enableTeams && (
+                          <>
+                            <li>Team.ReadBasic.All（チーム情報の読み取り）</li>
+                            <li>Channel.ReadBasic.All（チャネル情報の読み取り）</li>
+                            <li>ChannelMessage.Read.All（チャネルメッセージの読み取り）</li>
+                            <li>Chat.Read（チャットの読み取り）</li>
+                            <li>Chat.ReadBasic（チャット基本情報の読み取り）</li>
+                          </>
+                        )}
                       </ul>
                       <p className="mt-2">
                         リダイレクト URI: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}</code>

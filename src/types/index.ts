@@ -90,6 +90,8 @@ export interface APIConfig {
   enableOutlook?: boolean;
   microsoftClientId?: string;
   microsoftTenantId?: string;
+  // Microsoft Teams 連携
+  enableTeams?: boolean;
   // Private RAG (Azure Blob + AI Search)
   enablePrivateRAG?: boolean;
   privateRAGBlobUrl?: string;           // Blob Storage URL
@@ -333,4 +335,98 @@ export interface PrivateRAGSearchResult {
     highlights?: string[];
   }>;
   searchPerformed: boolean;
+}
+
+// ============================================
+// Microsoft Teams
+// ============================================
+
+// Teamsメッセージ
+export interface TeamsMessage {
+  id: string;
+  replyToId?: string;
+  etag?: string;
+  messageType: string;
+  createdDateTime: string;
+  lastModifiedDateTime?: string;
+  deletedDateTime?: string;
+  subject?: string;
+  summary?: string;
+  importance?: string;
+  locale?: string;
+  webUrl?: string;
+  from?: {
+    user?: {
+      id: string;
+      displayName: string;
+      userIdentityType: string;
+    };
+    application?: {
+      id: string;
+      displayName: string;
+      applicationIdentityType: string;
+    };
+  };
+  body?: {
+    contentType: string; // html, text
+    content: string;
+  };
+  attachments?: Array<{
+    id: string;
+    contentType: string;
+    contentUrl?: string;
+    content?: string;
+    name?: string;
+    thumbnailUrl?: string;
+  }>;
+  mentions?: Array<{
+    id: number;
+    mentionText: string;
+    mentioned: {
+      user?: {
+        displayName: string;
+        id: string;
+        userIdentityType: string;
+      };
+    };
+  }>;
+  reactions?: Array<{
+    reactionType: string;
+    createdDateTime: string;
+    user: {
+      user?: {
+        displayName: string;
+        id: string;
+        userIdentityType: string;
+      };
+    };
+  }>;
+}
+
+// Teamsチャネル
+export interface TeamsChannel {
+  id: string;
+  displayName: string;
+  description?: string;
+  email?: string;
+  webUrl?: string;
+  membershipType?: string;
+}
+
+// Teamsチャット
+export interface TeamsChat {
+  id: string;
+  topic?: string;
+  createdDateTime: string;
+  lastUpdatedDateTime: string;
+  chatType: string; // oneOnOne, group, meeting
+  webUrl?: string;
+  tenantId?: string;
+  members?: Array<{
+    id: string;
+    displayName?: string;
+    userId?: string;
+    email?: string;
+    roles?: string[];
+  }>;
 }

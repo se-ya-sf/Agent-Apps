@@ -80,7 +80,19 @@ export async function runAgentLoop(
         args = {};
       }
       
-      const result = await executeTool(toolName, args);
+      // 検索設定とコンテキストを準備
+      const searchConfig = {
+        provider: config.searchProvider || 'duckduckgo',
+        tavilyApiKey: config.tavilyApiKey,
+        braveApiKey: config.braveApiKey,
+      };
+      
+      const toolContext = {
+        outlookEnabled: config.enableOutlook === true,
+        teamsEnabled: config.enableTeams === true,
+      };
+      
+      const result = await executeTool(toolName, args, searchConfig, toolContext);
       options.onToolResult?.(toolName, result);
       
       // Add tool result message
@@ -347,10 +359,11 @@ async function sendAzureClaude(
     requestBody.system = systemMessage.content;
   }
 
-  // エージェントモード時のツール追加（Outlook有効時はOutlookツールも含む）
+  // エージェントモード時のツール追加（Outlook/Teams有効時はツールも含む）
   if (options.enableAgent) {
     const includeOutlook = config.enableOutlook === true;
-    const tools = getOpenAITools(includeOutlook);
+    const includeTeams = config.enableTeams === true;
+    const tools = getOpenAITools(includeOutlook, includeTeams);
     requestBody.tools = tools.map(tool => ({
       name: tool.function.name,
       description: tool.function.description,
@@ -660,10 +673,11 @@ ${outlookEnabled ? `
     requestBody.max_tokens = 4096;
   }
   
-  // Add tools if agent mode is enabled（Outlook有効時はOutlookツールも含む）
+  // Add tools if agent mode is enabled（Outlook/Teams有効時はツールも含む）
   if (options.enableAgent) {
     const includeOutlook = config.enableOutlook === true;
-    requestBody.tools = getOpenAITools(includeOutlook);
+    const includeTeams = config.enableTeams === true;
+    requestBody.tools = getOpenAITools(includeOutlook, includeTeams);
     requestBody.tool_choice = 'auto';
   }
 
@@ -780,9 +794,11 @@ async function sendGoogleGemini(
     requestBody.systemInstruction = { parts: [{ text: systemMessage.content }] };
   }
   
-  // Add tools if agent mode is enabled
+  // Add tools if agent mode is enabled（Outlook/Teams有効時はツールも含む）
   if (options.enableAgent) {
-    requestBody.tools = getGeminiTools();
+    const includeOutlook = config.enableOutlook === true;
+    const includeTeams = config.enableTeams === true;
+    requestBody.tools = getGeminiTools(includeOutlook, includeTeams);
   }
 
   const response = await fetch(url, {
