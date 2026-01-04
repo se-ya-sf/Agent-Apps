@@ -204,7 +204,7 @@ export const OUTLOOK_TOOLS: ToolDefinition[] = [
 export const TEAMS_TOOLS: ToolDefinition[] = [
   {
     name: 'teams_search_messages',
-    description: 'Microsoft Teamsの全チャネルメッセージを横断検索します。キーワードを指定して、ユーザーが参加している全てのチーム・チャネルからメッセージを検索します。過去の会話、スレッド情報、議事録などを探す際に使用してください。',
+    description: 'Microsoft Teamsの全チャネルメッセージを横断検索します。キーワードを指定して、ユーザーが参加している全てのチーム・チャネルからメッセージを検索します。過去の会話、スレッド情報、議事録などを探す際に使用してください。注意: プライベートチャットは含まれず、チャネルメッセージのみが対象です。',
     parameters: {
       type: 'object',
       properties: {
@@ -285,38 +285,6 @@ export const TEAMS_TOOLS: ToolDefinition[] = [
         },
       },
       required: ['teamId'],
-    },
-  },
-  {
-    name: 'teams_get_chats',
-    description: 'ユーザーのTeamsチャット（1対1、グループチャット）の一覧を取得します。最近のチャットや会話相手を確認する際に使用してください。',
-    parameters: {
-      type: 'object',
-      properties: {
-        maxResults: {
-          type: 'number',
-          description: '取得する最大件数。デフォルトは50件、最大50件',
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'teams_get_chat_messages',
-    description: '特定のチャットからメッセージを取得します。1対1チャットやグループチャットの履歴を確認する際に使用してください。',
-    parameters: {
-      type: 'object',
-      properties: {
-        chatId: {
-          type: 'string',
-          description: 'チャットのID（teams_get_chatsで取得）',
-        },
-        maxResults: {
-          type: 'number',
-          description: '取得する最大件数。デフォルトは50件、最大50件',
-        },
-      },
-      required: ['chatId'],
     },
   },
 ];
@@ -990,76 +958,6 @@ export async function executeTool(
       } catch (error) {
         return JSON.stringify({
           error: `チャネル一覧取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        });
-      }
-    }
-    
-    case 'teams_get_chats': {
-      if (!toolContext?.teamsEnabled) {
-        return JSON.stringify({
-          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
-        });
-      }
-      try {
-        const { getUserChats, isTeamsEnabled } = await import('./teams');
-        
-        if (!isTeamsEnabled()) {
-          return JSON.stringify({
-            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
-          });
-        }
-        
-        const maxResults = Math.min(Number(args.maxResults) || 50, 50);
-        const chats = await getUserChats(maxResults);
-        
-        return JSON.stringify({
-          success: true,
-          count: chats.length,
-          chats: chats.map(c => ({
-            id: c.id,
-            topic: c.topic || '(トピックなし)',
-            chatType: c.chatType,
-            lastUpdated: c.lastUpdatedDateTime,
-            members: c.members?.map(m => m.displayName).join(', '),
-          })),
-        }, null, 2);
-      } catch (error) {
-        return JSON.stringify({
-          error: `チャット一覧取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        });
-      }
-    }
-    
-    case 'teams_get_chat_messages': {
-      if (!toolContext?.teamsEnabled) {
-        return JSON.stringify({
-          error: 'Teams連携が有効になっていません。設定画面でMicrosoftアカウントにサインインしてください。',
-        });
-      }
-      try {
-        const { getChatMessages, formatTeamsMessagesForLLM, isTeamsEnabled } = await import('./teams');
-        
-        if (!isTeamsEnabled()) {
-          return JSON.stringify({
-            error: 'Microsoftアカウントにサインインしていません。設定画面からサインインしてください。',
-          });
-        }
-        
-        const chatId = args.chatId as string;
-        const maxResults = Math.min(Number(args.maxResults) || 50, 50);
-        
-        const messages = await getChatMessages(chatId, maxResults);
-        const formattedMessages = formatTeamsMessagesForLLM(messages);
-        
-        return JSON.stringify({
-          success: true,
-          count: messages.length,
-          messages: formattedMessages,
-          rawMessages: messages,
-        }, null, 2);
-      } catch (error) {
-        return JSON.stringify({
-          error: `チャットメッセージ取得エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
       }
     }

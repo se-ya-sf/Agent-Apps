@@ -12,12 +12,10 @@ const GRAPH_SCOPES = [
   'User.Read',
   'Calendars.Read',
   'Calendars.ReadWrite',
-  // Teams アクセス用
+  // Teams アクセス用（チャネルメッセージのみ、プライベートチャットは除外）
   'Team.ReadBasic.All',
   'Channel.ReadBasic.All',
   'ChannelMessage.Read.All',
-  'Chat.Read',
-  'Chat.ReadBasic',
 ];
 
 // MSALインスタンスの初期化

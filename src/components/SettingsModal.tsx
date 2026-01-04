@@ -752,7 +752,7 @@ export default function SettingsModal() {
               <div className="flex-1 text-left">
                 <div className="flex items-center gap-2">
                   <span className={`font-medium ${localConfig.enableTeams ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}`}>
-                    Teams メッセージ検索
+                    Teams チャネルメッセージ検索
                   </span>
                   <span className={`
                     text-xs px-2 py-0.5 rounded-full
@@ -765,7 +765,7 @@ export default function SettingsModal() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  チャネルメッセージ、チャット、スレッド検索
+                  チャネルメッセージ、スレッド検索（プライベートチャット除外）
                 </p>
               </div>
             </button>
@@ -877,11 +877,12 @@ export default function SettingsModal() {
                             <li>Team.ReadBasic.All（チーム情報の読み取り）</li>
                             <li>Channel.ReadBasic.All（チャネル情報の読み取り）</li>
                             <li>ChannelMessage.Read.All（チャネルメッセージの読み取り）</li>
-                            <li>Chat.Read（チャットの読み取り）</li>
-                            <li>Chat.ReadBasic（チャット基本情報の読み取り）</li>
                           </>
                         )}
                       </ul>
+                      <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                        ※ Teams連携はチャネルメッセージのみで、プライベートチャットは対象外です
+                      </p>
                       <p className="mt-2">
                         リダイレクト URI: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}</code>
                       </p>
