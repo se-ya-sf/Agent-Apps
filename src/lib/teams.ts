@@ -112,44 +112,6 @@ export async function getMessageReplies(
 }
 
 /**
- * ユーザーのチャット一覧を取得
- */
-export async function getUserChats(maxResults: number = 50, accessToken?: string): Promise<TeamsChat[]> {
-  const token = accessToken || await getAccessToken();
-  const params = new URLSearchParams({
-    $top: Math.min(maxResults, 50).toString(),
-    $expand: 'members',
-  });
-  
-  const response = await callGraphApi<{ value: TeamsChat[] }>(
-    `/me/chats?${params.toString()}`,
-    token
-  );
-  return response.value || [];
-}
-
-/**
- * 特定チャットのメッセージを取得
- */
-export async function getChatMessages(
-  chatId: string,
-  maxResults: number = 50,
-  accessToken?: string
-): Promise<TeamsMessage[]> {
-  const token = accessToken || await getAccessToken();
-  const params = new URLSearchParams({
-    $top: Math.min(maxResults, 50).toString(),
-    $orderby: 'createdDateTime desc',
-  });
-  
-  const response = await callGraphApi<{ value: TeamsMessage[] }>(
-    `/chats/${chatId}/messages?${params.toString()}`,
-    token
-  );
-  return response.value || [];
-}
-
-/**
  * キーワードでチャネルメッセージを検索
  * （Microsoft Graph APIにはメッセージ検索の直接APIがないため、取得後にフィルタリング）
  */
