@@ -2,6 +2,24 @@
 
 import type { IndexerRunResult, PrivateRAGSearchResult } from '@/types';
 
+// Azure AI Search レスポンス用の型定義
+interface AzureSearchHighlights {
+  chunk?: string[];
+  [key: string]: string[] | undefined;
+}
+
+interface AzureSearchDoc {
+  chunk?: string;
+  chunk_id?: string;
+  title?: string;
+  parent_id?: string;
+  doc_id?: string;
+  user_id?: string;
+  '@search.score'?: number;
+  '@search.highlights'?: AzureSearchHighlights;
+  [key: string]: unknown;
+}
+
 // AI Search 設定インターフェース
 interface SearchConfig {
   endpoint: string;      // https://<service>.search.windows.net
@@ -174,12 +192,12 @@ export async function searchPrivateRAG(
     }
 
     // 結果を整形
-    const documents = results.map((doc: Record<string, unknown>) => ({
-      docId: (doc.doc_id as string) || (doc.chunk_id as string) || '',
-      fileName: (doc.title as string) || 'Unknown',
-      content: (doc.chunk as string) || '',
-      score: (doc['@search.score'] as number) || 0,
-      highlights: doc['@search.highlights']?.chunk as string[] | undefined,
+    const documents = (results as AzureSearchDoc[]).map((doc) => ({
+      docId: doc.doc_id || doc.chunk_id || '',
+      fileName: doc.title || 'Unknown',
+      content: doc.chunk || '',
+      score: doc['@search.score'] || 0,
+      highlights: doc['@search.highlights']?.chunk,
     }));
 
     return {
