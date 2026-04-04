@@ -1,6 +1,7 @@
 'use client';
 
 import { useStore } from '@/store/useStore';
+import { useClubStore } from '@/store/useClubStore';
 import { 
   Plus, 
   MessageSquare, 
@@ -11,7 +12,11 @@ import {
   Sparkles,
   Pin,
   PinOff,
-  Database
+  Database,
+  Wine,
+  Users,
+  BookOpen,
+  Bell
 } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -29,6 +34,8 @@ export default function Sidebar() {
     toggleSettings,
     togglePinChat,
   } = useStore();
+
+  const { members, experienceLogs } = useClubStore();
 
   // ピン留めされたチャットを上に表示
   const sortedChats = [...chats].sort((a, b) => {
@@ -72,10 +79,10 @@ export default function Sidebar() {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-purple-700/50">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-red-600 rounded-lg flex items-center justify-center">
+              <Wine className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-white">AI Chat</span>
+            <span className="text-xl font-bold text-white">Wine & Beer</span>
           </div>
           <button
             onClick={toggleSidebar}
@@ -217,6 +224,30 @@ export default function Sidebar() {
               </>
             )}
           </div>
+        </div>
+
+        {/* Club Section */}
+        <div className="px-2 pb-2">
+          <div className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-300/70 font-medium">
+            <Wine className="w-3 h-3" />
+            部活管理
+          </div>
+          <Link
+            href="/members"
+            className="flex items-center gap-3 px-3 py-2.5 text-purple-200 hover:text-white hover:bg-purple-700/30 rounded-xl transition-all"
+          >
+            <Users className="w-5 h-5" />
+            <span className="text-sm font-medium">メンバー・好み</span>
+            <span className="ml-auto text-xs bg-purple-700/50 px-2 py-0.5 rounded-full">{members.length}</span>
+          </Link>
+          <Link
+            href="/logs"
+            className="flex items-center gap-3 px-3 py-2.5 text-purple-200 hover:text-white hover:bg-purple-700/30 rounded-xl transition-all"
+          >
+            <BookOpen className="w-5 h-5" />
+            <span className="text-sm font-medium">体験ログ</span>
+            <span className="ml-auto text-xs bg-purple-700/50 px-2 py-0.5 rounded-full">{experienceLogs.length}</span>
+          </Link>
         </div>
 
         {/* Footer Buttons */}
