@@ -1,4 +1,5 @@
 import { ToolDefinition, SearchResult, SearchProvider } from '@/types';
+import { CLUB_TOOLS, executeClubTool } from './clubTools';
 
 // Tool definitions for function calling
 export const AVAILABLE_TOOLS: ToolDefinition[] = [
@@ -296,10 +297,47 @@ interface SearchConfig {
   braveApiKey?: string;
 }
 
+// Club store interface for tool execution
+export interface ClubStoreForTools {
+  members: { id: string; name: string; displayName: string }[];
+  getPreferences: (memberId: string) => unknown;
+  setPreference: (memberId: string, category: 'wine' | 'beer' | 'other', data: Record<string, unknown>) => void;
+  addExperienceLog: (log: {
+    memberId: string;
+    date: string;
+    drinkName: string;
+    drinkType: 'wine' | 'beer' | 'other';
+    category?: string;
+    rating?: number;
+    impression?: string;
+    shop?: string;
+    companions?: string[];
+    price?: string;
+  }) => string;
+  getExperienceLogs: (memberId?: string) => Array<{
+    id: string;
+    memberId: string;
+    date: string;
+    drinkName: string;
+    drinkType: string;
+    category?: string;
+    rating?: number;
+    impression?: string;
+    shop?: string;
+    companions?: string[];
+    price?: string;
+    createdAt: string;
+  }>;
+  getMemberSummary: (memberId: string) => string;
+  getAllMembersSummary: () => string;
+  teamsWebhook: { webhookUrl: string; enabled: boolean };
+}
+
 // Tool execution context（Outlook等の追加コンテキスト）
 export interface ToolContext {
   outlookEnabled?: boolean;
   teamsEnabled?: boolean;
+  clubStore?: ClubStoreForTools;
 }
 
 // Tavily Search API (recommended for AI agents)
@@ -560,6 +598,11 @@ export async function executeTool(
   searchConfig?: SearchConfig,
   toolContext?: ToolContext
 ): Promise<string> {
+  // Club tools
+  if (toolName.startsWith('club_') && toolContext?.clubStore) {
+    return executeClubTool(toolName, args, toolContext.clubStore);
+  }
+
   switch (toolName) {
     case 'web_search': {
       const results = await executeWebSearch(args.query as string, searchConfig);
@@ -968,10 +1011,11 @@ export async function executeTool(
 }
 
 // Convert tools to OpenAI/Azure format
-export function getOpenAITools(includeOutlook: boolean = false, includeTeams: boolean = false) {
+export function getOpenAITools(includeOutlook: boolean = false, includeTeams: boolean = false, includeClub: boolean = true) {
   let tools = [...AVAILABLE_TOOLS];
   if (includeOutlook) tools = [...tools, ...OUTLOOK_TOOLS];
   if (includeTeams) tools = [...tools, ...TEAMS_TOOLS];
+  if (includeClub) tools = [...tools, ...CLUB_TOOLS];
     
   return tools.map(tool => ({
     type: 'function' as const,
@@ -984,10 +1028,11 @@ export function getOpenAITools(includeOutlook: boolean = false, includeTeams: bo
 }
 
 // Convert tools to Gemini format
-export function getGeminiTools(includeOutlook: boolean = false, includeTeams: boolean = false) {
+export function getGeminiTools(includeOutlook: boolean = false, includeTeams: boolean = false, includeClub: boolean = true) {
   let tools = [...AVAILABLE_TOOLS];
   if (includeOutlook) tools = [...tools, ...OUTLOOK_TOOLS];
   if (includeTeams) tools = [...tools, ...TEAMS_TOOLS];
+  if (includeClub) tools = [...tools, ...CLUB_TOOLS];
     
   return [{
     functionDeclarations: tools.map(tool => ({
