@@ -13,10 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Chat - Azure OpenAI & Google Gemini",
-  description: "A modern AI chat application supporting Azure OpenAI and Google Gemini APIs",
+  title: "Wine & Beer Club Agent",
+  description: "Wine & Beer Club - AI Agent for managing drink preferences, experience logs, and personalized recommendations",
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>",
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍷</text></svg>",
   },
 };
 

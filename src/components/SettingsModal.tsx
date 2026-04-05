@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
+import { useClubStore } from '@/store/useClubStore';
 import { 
   APIProvider, 
   SearchProvider, 
@@ -36,11 +37,14 @@ import {
   LogIn,
   LogOut,
   User,
-  MessageSquare
+  MessageSquare,
+  Bell,
+  Wine
 } from 'lucide-react';
 
 export default function SettingsModal() {
   const { isSettingsOpen, toggleSettings, apiConfig, setApiConfig } = useStore();
+  const { teamsWebhook, setTeamsWebhook } = useClubStore();
   
   const [localConfig, setLocalConfig] = useState(apiConfig);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -966,6 +970,79 @@ export default function SettingsModal() {
                       <p className="mt-2">
                         リダイレクト URI: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">{typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}</code>
                       </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Teams Incoming Webhook (Wine & Beer Club) */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Teams Incoming Webhook (ワイン・ビール部活)
+            </label>
+            <button
+              onClick={() => setTeamsWebhook({ enabled: !teamsWebhook.enabled })}
+              className={`
+                w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all
+                ${teamsWebhook.enabled
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-amber-300'
+                }
+              `}
+            >
+              <div className={`
+                w-12 h-12 rounded-xl flex items-center justify-center
+                ${teamsWebhook.enabled
+                  ? 'bg-amber-500 text-white' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                }
+              `}>
+                <Bell className="w-6 h-6" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <span className={`font-medium ${teamsWebhook.enabled ? 'text-amber-700 dark:text-amber-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                    Teams通知連携
+                  </span>
+                  <span className={`
+                    text-xs px-2 py-0.5 rounded-full
+                    ${teamsWebhook.enabled
+                      ? 'bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-300' 
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    }
+                  `}>
+                    {teamsWebhook.enabled ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  ワイン・ビールの提案をTeamsに自動通知
+                </p>
+              </div>
+            </button>
+          </div>
+
+          {teamsWebhook.enabled && (
+            <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <Bell className="w-4 h-4" />
+                  Incoming Webhook URL
+                </label>
+                <input
+                  type="text"
+                  value={teamsWebhook.webhookUrl}
+                  onChange={(e) => setTeamsWebhook({ webhookUrl: e.target.value })}
+                  placeholder="https://xxx.webhook.office.com/webhookb2/..."
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
+                />
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-amber-700 dark:text-amber-300">
+                      <p>Teamsのチャンネルで「Incoming Webhook」コネクタを追加してURLを取得してください。</p>
+                      <p className="mt-1">AIがワイン・ビールのおすすめ情報を自動送信します。</p>
                     </div>
                   </div>
                 </div>
