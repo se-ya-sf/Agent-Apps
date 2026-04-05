@@ -378,16 +378,17 @@ export default function SettingsModal() {
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
                 />
                 
-                {/* Claude + Model Router 警告 */}
-                {isClaudeModel(localConfig.azureDeploymentName) && localConfig.azureEndpoint?.includes('modelrouter') && (
-                  <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                {/* Claude モデル利用時のヒント */}
+                {isClaudeModel(localConfig.azureDeploymentName) && (
+                  <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                      <div className="text-xs text-red-700 dark:text-red-300">
-                        <p className="font-bold">Model Router では Claude Sonnet 4.6 / Opus 4.6 は非対応です</p>
-                        <p className="mt-1">Claude モデルを使用するには、Claude 専用のデプロイメントを作成し、そのエンドポイントを使用してください。</p>
+                      <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-blue-700 dark:text-blue-300">
+                        <p className="font-bold">Claude モデル利用時の注意</p>
+                        <p className="mt-1">Claude Sonnet 4.6 / Opus 4.6 は <strong>直接デプロイメント</strong>が必要です（Model Router 経由では非対応）。</p>
                         <p className="mt-1">対応リージョン: <strong>East US 2</strong> / <strong>Sweden Central</strong></p>
-                        <p className="mt-1">形式: <code className="bg-red-100 dark:bg-red-800 px-1 rounded">https://&lt;resource&gt;.services.ai.azure.com</code></p>
+                        <p className="mt-1">エンドポイント形式: <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://&lt;resource&gt;.services.ai.azure.com</code></p>
+                        <p className="mt-1 text-blue-600 dark:text-blue-400">401エラーが出る場合は、APIキーとリージョンを確認してください。</p>
                       </div>
                     </div>
                   </div>
