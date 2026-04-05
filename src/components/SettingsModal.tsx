@@ -8,7 +8,11 @@ import {
   GEMINI_MODELS, 
   AZURE_OPENAI_API_VERSIONS,
   AZURE_DEPLOYMENT_EXAMPLES,
-  isGPT5Model
+  isGPT5Model,
+  isClaudeModel,
+  isGrokModel,
+  isDeepSeekModel,
+  isV1Api
 } from '@/types';
 import { 
   X, 
@@ -140,30 +144,66 @@ export default function SettingsModal() {
           throw new Error('必須項目を入力してください');
         }
 
-        const url = `${localConfig.azureEndpoint}/openai/deployments/${localConfig.azureDeploymentName}/chat/completions?api-version=${localConfig.azureApiVersion || '2025-04-01-preview'}`;
-        
-        // GPT-5系モデルかどうかを判定（max_tokensがサポートされていない）
+        // Claudeモデルの場合はAnthropic APIでテスト
+        const isClaude = isClaudeModel(localConfig.azureDeploymentName);
+        const useV1 = isV1Api(localConfig.azureApiVersion) || isGrokModel(localConfig.azureDeploymentName) || isDeepSeekModel(localConfig.azureDeploymentName);
         const isGPT5 = isGPT5Model(localConfig.azureDeploymentName);
         
-        // リクエストボディの構築
-        const requestBody: Record<string, unknown> = {
-          messages: [{ role: 'user', content: 'Hello' }],
-        };
+        let testUrl: string;
+        let testBody: Record<string, unknown>;
+        let testHeaders: Record<string, string>;
         
-        // GPT-5系では max_completion_tokens、それ以外は max_tokens
-        if (isGPT5) {
-          requestBody.max_completion_tokens = 50;
+        if (isClaude) {
+          // Claude: Anthropic Messages API
+          let baseEp = localConfig.azureEndpoint!.replace(/\/$/, '');
+          if (baseEp.includes('.openai.azure.com')) {
+            baseEp = baseEp.replace('.openai.azure.com', '.services.ai.azure.com');
+          }
+          baseEp = baseEp.replace(/\/anthropic(\/.*)?$/, '');
+          testUrl = `${baseEp}/anthropic/v1/messages`;
+          testBody = {
+            model: localConfig.azureDeploymentName,
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'Hello' }],
+          };
+          testHeaders = {
+            'Content-Type': 'application/json',
+            'api-key': localConfig.azureApiKey!,
+            'anthropic-version': '2024-06-01',
+          };
+        } else if (useV1) {
+          // v1 API
+          testUrl = `${localConfig.azureEndpoint!.replace(/\/$/, '')}/openai/v1/chat/completions`;
+          testBody = {
+            model: localConfig.azureDeploymentName,
+            messages: [{ role: 'user', content: 'Hello' }],
+            max_completion_tokens: 50,
+          };
+          testHeaders = {
+            'Content-Type': 'application/json',
+            'api-key': localConfig.azureApiKey!,
+          };
         } else {
-          requestBody.max_tokens = 10;
+          // レガシーAPI
+          testUrl = `${localConfig.azureEndpoint}/openai/deployments/${localConfig.azureDeploymentName}/chat/completions?api-version=${localConfig.azureApiVersion || '2025-04-01-preview'}`;
+          testBody = {
+            messages: [{ role: 'user', content: 'Hello' }],
+          };
+          if (isGPT5) {
+            testBody.max_completion_tokens = 50;
+          } else {
+            testBody.max_tokens = 10;
+          }
+          testHeaders = {
+            'Content-Type': 'application/json',
+            'api-key': localConfig.azureApiKey!,
+          };
         }
 
-        const response = await fetch(url, {
+        const response = await fetch(testUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'api-key': localConfig.azureApiKey,
-          },
-          body: JSON.stringify(requestBody),
+          headers: testHeaders,
+          body: JSON.stringify(testBody),
         });
 
         if (!response.ok) {
@@ -178,7 +218,7 @@ export default function SettingsModal() {
           throw new Error('API キーを入力してください');
         }
 
-        const model = localConfig.geminiModel || 'gemini-2.0-flash-exp';
+        const model = localConfig.geminiModel || 'gemini-2.0-flash';
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${localConfig.geminiApiKey}`;
 
         const response = await fetch(url, {
@@ -255,7 +295,7 @@ export default function SettingsModal() {
                   Azure OpenAI
                 </span>
                 <span className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                  GPT-4o / GPT-5 / Claude / Grok
+                  GPT-5.2 / Claude 4.6 / Grok 4 / DeepSeek
                 </span>
               </button>
               <button
@@ -273,7 +313,7 @@ export default function SettingsModal() {
                   Google Gemini
                 </span>
                 <span className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                  Gemini 2.0 / 2.5 / 1.5
+                  Gemini 2.5 Pro / 2.0 Flash / 1.5
                 </span>
               </button>
             </div>
@@ -285,12 +325,12 @@ export default function SettingsModal() {
               <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                 <ExternalLink className="w-4 h-4" />
                 <a 
-                  href="https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI" 
+                  href="https://ai.azure.com/catalog/models" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="hover:text-purple-500 underline"
                 >
-                  Azure Portal で OpenAI を作成
+                  Microsoft Foundry モデルカタログ
                 </a>
               </div>
 
@@ -303,7 +343,7 @@ export default function SettingsModal() {
                   type="text"
                   value={localConfig.azureEndpoint || ''}
                   onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureEndpoint: e.target.value }))}
-                  placeholder="https://your-resource.openai.azure.com"
+                  placeholder="https://your-resource.openai.azure.com または .services.ai.azure.com"
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
                 />
               </div>
@@ -334,6 +374,21 @@ export default function SettingsModal() {
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white placeholder-slate-400"
                 />
                 
+                {/* Claude + Model Router 警告 */}
+                {isClaudeModel(localConfig.azureDeploymentName) && localConfig.azureEndpoint?.includes('modelrouter') && (
+                  <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-red-700 dark:text-red-300">
+                        <p className="font-bold">Model Router では Claude Sonnet 4.6 / Opus 4.6 は非対応です</p>
+                        <p className="mt-1">Claude モデルを使用するには、Claude 専用のデプロイメントを作成し、そのエンドポイントを使用してください。</p>
+                        <p className="mt-1">対応リージョン: <strong>East US 2</strong> / <strong>Sweden Central</strong></p>
+                        <p className="mt-1">形式: <code className="bg-red-100 dark:bg-red-800 px-1 rounded">https://&lt;resource&gt;.services.ai.azure.com</code></p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* デプロイメント名の例 */}
                 <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2 mb-2">
@@ -364,14 +419,39 @@ export default function SettingsModal() {
                   API バージョン
                 </label>
                 <select
-                  value={localConfig.azureApiVersion || '2025-04-01-preview'}
+                  value={localConfig.azureApiVersion || 'v1'}
                   onChange={(e) => setLocalConfig((prev) => ({ ...prev, azureApiVersion: e.target.value }))}
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
                 >
                   {AZURE_OPENAI_API_VERSIONS.map((version) => (
-                    <option key={version} value={version}>{version}</option>
+                    <option key={version} value={version}>
+                      {version === 'v1' ? 'v1 (GA - 推奨、api-version不要)' : 
+                       version === 'v1-preview' ? 'v1-preview (最新プレビュー機能)' : 
+                       version}
+                    </option>
                   ))}
                 </select>
+                {isV1Api(localConfig.azureApiVersion) && (
+                  <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <p className="text-xs text-green-700 dark:text-green-300">
+                      v1 API: /openai/v1/ パスを使用。Grok・DeepSeek等の他プロバイダーモデルも対応。
+                    </p>
+                  </div>
+                )}
+                {isClaudeModel(localConfig.azureDeploymentName) && (
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      Claudeモデル: 自動的に Anthropic Messages API (/anthropic/v1/messages) を使用します。
+                    </p>
+                  </div>
+                )}
+                {(isGrokModel(localConfig.azureDeploymentName) || isDeepSeekModel(localConfig.azureDeploymentName)) && !isV1Api(localConfig.azureApiVersion) && (
+                  <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Grok/DeepSeekモデルは自動的にv1 APIを使用します。
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -410,7 +490,7 @@ export default function SettingsModal() {
                   モデル
                 </label>
                 <select
-                  value={localConfig.geminiModel || 'gemini-2.0-flash-exp'}
+                  value={localConfig.geminiModel || 'gemini-2.0-flash'}
                   onChange={(e) => setLocalConfig((prev) => ({ ...prev, geminiModel: e.target.value }))}
                   className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all text-slate-800 dark:text-white"
                 >

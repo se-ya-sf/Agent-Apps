@@ -1,4 +1,4 @@
-import { APIConfig, Message, ToolCall, ImageAttachment, Citation, useMaxCompletionTokens, isGPT5Model, isClaudeModel } from '@/types';
+import { APIConfig, Message, ToolCall, ImageAttachment, Citation, useMaxCompletionTokens, isGPT5Model, isClaudeModel, isGrokModel, isDeepSeekModel, isV1Api } from '@/types';
 import { getOpenAITools, getGeminiTools, executeTool } from './tools';
 
 export interface AgentResponse {
@@ -236,10 +236,10 @@ async function searchAzureIndex(
   }
 }
 
-// Azure Foundry Claude モデル用の送信関数
-// 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude
+// Microsoft Foundry Claude モデル用の送信関数
+// 参照: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/configure-claude-code
 // Claude は Anthropic Messages API 形式を使用 (エンドポイント: /anthropic/v1/messages)
-// 正しいモデル名: claude-opus-4-5, claude-sonnet-4-5, claude-haiku-4-5, claude-opus-4-1
+// 最新モデル: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-5, claude-sonnet-4-5
 async function sendAzureClaude(
   messages: Message[],
   config: APIConfig,
@@ -249,10 +249,10 @@ async function sendAzureClaude(
     throw new Error('Azure OpenAI / Foundry の設定が不完全です。設定画面で必要な情報を入力してください。');
   }
 
-  // Azure Foundry Claude エンドポイント
+  // Microsoft Foundry Claude エンドポイント
   // 形式: https://<resource-name>.services.ai.azure.com/anthropic/v1/messages
-  // 重要: Azure OpenAI (.openai.azure.com) と Azure AI Foundry (.services.ai.azure.com) は異なる
-  // Claude は Azure AI Foundry でのみ利用可能
+  // 重要: Azure OpenAI (.openai.azure.com) と Microsoft Foundry (.services.ai.azure.com) は異なる
+  // Claude は Microsoft Foundry でのみ利用可能（East US 2 / Sweden Central）
   let baseEndpoint = config.azureEndpoint.replace(/\/$/, ''); // 末尾のスラッシュを除去
   
   // .openai.azure.com → .services.ai.azure.com に変換（必要な場合）
@@ -373,15 +373,47 @@ async function sendAzureClaude(
 
   console.log('Claude リクエストボディ:', JSON.stringify(requestBody, null, 2));
   
+  // Microsoft Foundry Claude 認証:
+  // api-key ヘッダーで認証（公式ドキュメント準拠）
+  // 参照: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'api-key': config.azureApiKey,
-      'anthropic-version': '2023-06-01',
+      'anthropic-version': '2024-06-01',
     },
     body: JSON.stringify(requestBody),
   });
+
+  // 401エラー時のフォールバック: x-api-key ヘッダーで再試行
+  // 一部の Foundry 構成では x-api-key が必要な場合がある
+  if (response.status === 401) {
+    console.log('api-key ヘッダーで401エラー。x-api-key で再試行します...');
+    const retryResponse = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.azureApiKey,
+        'anthropic-version': '2024-06-01',
+      },
+      body: JSON.stringify(requestBody),
+    });
+    
+    if (!retryResponse.ok) {
+      const errorText = await retryResponse.text();
+      console.error('Claude API エラー詳細 (x-api-key):', {
+        status: retryResponse.status,
+        statusText: retryResponse.statusText,
+        errorText,
+        url,
+        model: config.azureDeploymentName,
+      });
+      throw new Error(`Azure Claude API エラー: ${retryResponse.status} - ${errorText}\n\n【確認事項】\n1. エンドポイントURL: ${url}\n2. Model Router経由の場合、Claude Sonnet 4.6 / Opus 4.6 は非対応です\n3. Claude専用のリソースエンドポイントを使用してください\n4. 対応リージョン: East US 2 / Sweden Central`);
+    }
+    
+    return processClaudeStream(retryResponse, options.onChunk);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -485,12 +517,33 @@ async function sendAzureOpenAI(
   }
 
   // Claude モデルの場合は Anthropic Messages API を使用
-  // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude
+  // 参照: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/configure-claude-code
   if (isClaudeModel(config.azureDeploymentName)) {
     return sendAzureClaude(messages, config, options);
   }
 
-  const url = `${config.azureEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2025-04-01-preview'}`;
+  // v1 API vs レガシーAPIでURLを切り替え
+  // v1 API: /openai/v1/chat/completions (api-version不要)
+  // レガシー: /openai/deployments/{name}/chat/completions?api-version=xxx
+  // Grok/DeepSeek等の他プロバイダーモデルもv1 chat completions構文で呼び出し可能
+  const useV1 = isV1Api(config.azureApiVersion) || isGrokModel(config.azureDeploymentName) || isDeepSeekModel(config.azureDeploymentName);
+  
+  let url: string;
+  let baseEndpoint = config.azureEndpoint!.replace(/\/$/, '');
+  
+  if (useV1) {
+    // v1 API: Grok/DeepSeekなどの他プロバイダーモデルも対応
+    // .openai.azure.com と .services.ai.azure.com の両方をサポート
+    if (baseEndpoint.includes('.openai.azure.com')) {
+      // そのまま使用
+    } else if (!baseEndpoint.includes('.services.ai.azure.com')) {
+      // そのまま使用
+    }
+    url = `${baseEndpoint}/openai/v1/chat/completions`;
+  } else {
+    // レガシーAPI
+    url = `${baseEndpoint}/openai/deployments/${config.azureDeploymentName}/chat/completions?api-version=${config.azureApiVersion || '2025-04-01-preview'}`;
+  }
 
   // RAGが有効な場合、最後のユーザーメッセージでインデックス検索
   let ragSearchResult: RAGSearchResult = { hasResults: false, context: '', searchPerformed: false, citations: [] };
@@ -660,7 +713,13 @@ ${outlookEnabled ? `
     stream: true,
   };
 
+  // v1 API では model フィールドが必須（デプロイメント名を指定）
+  if (useV1) {
+    requestBody.model = config.azureDeploymentName;
+  }
+
   // GPT-5 reasoning models では temperature, top_p 等はサポートされていない
+  // Grok/DeepSeek も reasoning model の場合は temperature を設定しない
   // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning
   if (!isReasoningModel) {
     requestBody.temperature = 0.7;
@@ -681,12 +740,19 @@ ${outlookEnabled ? `
     requestBody.tool_choice = 'auto';
   }
 
+  // v1 API では認証ヘッダーが異なる
+  // v1: api-key または Authorization: Bearer
+  // レガシー: api-key
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'api-key': config.azureApiKey!,
+  };
+
+  console.log(`Azure API URL: ${url}`, useV1 ? '(v1 API)' : '(レガシーAPI)', 'Model:', config.azureDeploymentName);
+
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'api-key': config.azureApiKey,
-    },
+    headers,
     body: JSON.stringify(requestBody),
   });
 
@@ -707,7 +773,7 @@ async function sendGoogleGemini(
     throw new Error('Google Gemini API キーが設定されていません。設定画面で入力してください。');
   }
 
-  const model = config.geminiModel || 'gemini-1.5-flash';
+  const model = config.geminiModel || 'gemini-2.0-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${config.geminiApiKey}`;
 
   // Convert messages to Gemini format
