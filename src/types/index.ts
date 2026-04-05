@@ -136,15 +136,23 @@ export interface AgentState {
   toolResults?: ToolResult[];
 }
 
-// Azure OpenAI Model Presets (2025年12月現在の最新)
+// Azure OpenAI / Microsoft Foundry API Versions (2026年4月現在の最新)
+// 参照: https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle
 export const AZURE_OPENAI_API_VERSIONS = [
-  '2025-04-01-preview',  // 最新 (GPT-5/5.1/5.2対応・必須)
-  '2025-03-01-preview',  // GPT-5対応
-  '2025-01-01-preview',  // GPT-5対応
-  '2024-12-01-preview',  // GPT-4o Audio対応
-  '2024-10-21',          // GA版 (GPT-4o等)
-  '2024-08-01-preview',  // Structured Outputs
+  'v1',                  // 最新 GA - v1 API (api-version不要、/openai/v1/ パス)
+  'v1-preview',          // v1 プレビュー (最新プレビュー機能)
+  '2025-04-01-preview',  // レガシー最新プレビュー (GPT-5/5.1/5.2対応)
+  '2025-03-01-preview',  // Responses API / Computer Use
+  '2025-01-01-preview',  // Predicted Outputs
+  '2024-12-01-preview',  // Reasoning effort / GPT-4o Audio
+  '2024-10-21',          // レガシーGA版 (GPT-4o等)
 ] as const;
+
+// v1 API かどうかを判定するヘルパー
+export const isV1Api = (apiVersion?: string): boolean => {
+  if (!apiVersion) return false;
+  return apiVersion === 'v1' || apiVersion === 'v1-preview';
+};
 
 // GPT-5系モデル (reasoning models) かどうかを判定するヘルパー
 // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning
@@ -153,7 +161,7 @@ export const isGPT5Model = (deploymentName?: string): boolean => {
   if (!deploymentName) return false;
   const name = deploymentName.toLowerCase();
   
-  // GPT-5 シリーズ: gpt-5, gpt-5.1, gpt-5.2, gpt-5-chat, gpt-5.1-chat, gpt-5.2-chat など
+  // GPT-5 シリーズ: gpt-5, gpt-5.1, gpt-5.2, gpt-5-chat, gpt-5.1-chat, gpt-5.2-chat, gpt-5.2-codex など
   // ドット付き (gpt-5.1) とハイフン付き (gpt-5-1) の両方をサポート
   if (name.includes('gpt-5') || name.includes('gpt5')) return true;
   
@@ -161,8 +169,8 @@ export const isGPT5Model = (deploymentName?: string): boolean => {
   // 正規表現でoの後に数字が続くパターンをチェック
   if (/\bo[134]-/.test(name) || /\bo[134]$/.test(name) || /\bo[134]mini/.test(name)) return true;
   
-  // codex-mini (reasoning model)
-  if (name === 'codex-mini' || name.includes('codex-mini')) return true;
+  // Codex models (reasoning model)
+  if (name.includes('codex')) return true;
   
   return false;
 };
@@ -179,38 +187,60 @@ export const useMaxCompletionTokens = (apiVersion?: string, deploymentName?: str
   return false;
 };
 
-// Azure OpenAI v1 API (2025年8月以降)
-export const AZURE_OPENAI_V1_ENABLED = false; // v1 API有効化フラグ
+// Azure OpenAI v1 API (2025年8月GA)
+// v1 APIはapi-versionパラメータ不要、/openai/v1/パスを使用
+// DeepSeek, Grok等の他プロバイダーモデルもv1 chat completions構文で呼び出し可能
+export const AZURE_OPENAI_V1_ENABLED = true; // v1 API有効化フラグ（GA済み）
 
-// Google Gemini Model Options (2025年12月現在)
+// Google Gemini Model Options (2026年4月現在)
+// 参照: https://ai.google.dev/gemini-api/docs/changelog
 export const GEMINI_MODELS = [
-  { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (実験版)', description: 'エージェント向け最適化' },
-  { value: 'gemini-2.0-flash-thinking-exp-01-21', label: 'Gemini 2.0 Flash Thinking', description: '推論特化・最新' },
-  { value: 'gemini-2.5-pro-preview', label: 'Gemini 2.5 Pro (プレビュー)', description: '最高性能' },
+  { value: 'gemini-2.5-pro-preview-05-06', label: 'Gemini 2.5 Pro (最新プレビュー)', description: '最高性能・100万トークン' },
+  { value: 'gemini-2.5-flash-preview-04-17', label: 'Gemini 2.5 Flash (プレビュー)', description: '高速・推論対応' },
+  { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'エージェント向け最適化・安定版' },
+  { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite', description: '軽量・高速版' },
+  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: '高性能・200万トークンコンテキスト' },
   { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: '高速・安定版' },
-  { value: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B', description: '軽量版' },
-  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: '高性能・大容量コンテキスト' },
 ] as const;
 
-// Azure OpenAI で利用可能なモデル例（デプロイメント名の例）
+// Microsoft Foundry で利用可能なモデル例（デプロイメント名の例）
+// 参照: https://devblogs.microsoft.com/foundry/whats-new-in-microsoft-foundry-feb-2026/
 export const AZURE_DEPLOYMENT_EXAMPLES = [
   // OpenAI モデル
-  { category: 'OpenAI GPT', examples: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4'] },
-  { category: 'OpenAI GPT-5', examples: ['gpt-5-chat', 'gpt-5.1-chat', 'gpt-5.2-chat', 'gpt-5-mini'] },
-  { category: 'OpenAI o-series', examples: ['o1', 'o1-mini', 'o3', 'o3-mini', 'o4-mini'] },
-  // Anthropic Claude (Azure Foundry経由)
-  // 参照: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude
-  { category: 'Claude', examples: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'] },
-  // xAI Grok (Azure経由)
-  { category: 'Grok', examples: ['grok-3', 'grok-3-mini'] },
+  { category: 'OpenAI GPT', examples: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'] },
+  { category: 'OpenAI GPT-5', examples: ['gpt-5.2', 'gpt-5.2-chat-latest', 'gpt-5.1-codex-max', 'gpt-5-mini'] },
+  { category: 'OpenAI o-series', examples: ['o1', 'o3', 'o3-mini', 'o3-pro', 'o4-mini'] },
+  // Anthropic Claude (Microsoft Foundry経由)
+  // 参照: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/configure-claude-code
+  { category: 'Claude', examples: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-opus-4-5', 'claude-sonnet-4-5'] },
+  // xAI Grok (Microsoft Foundry経由)
+  // 参照: Grok 4.0 GA, Grok 4.1 Fast Preview
+  { category: 'Grok', examples: ['grok-4', 'grok-4-fast-reasoning', 'grok-4-1-fast-non-reasoning'] },
+  // DeepSeek (Microsoft Foundry経由)
+  { category: 'DeepSeek', examples: ['MAI-DS-R1', 'deepseek-v3-2'] },
 ] as const;
 
 // Claude モデルかどうかを判定するヘルパー
-// Azure Foundry の Claude は専用エンドポイント（/anthropic/v1/messages）が必要
+// Microsoft Foundry の Claude は専用エンドポイント（/anthropic/v1/messages）が必要
 export const isClaudeModel = (deploymentName?: string): boolean => {
   if (!deploymentName) return false;
   const name = deploymentName.toLowerCase();
   return name.includes('claude');
+};
+
+// Grok モデルかどうかを判定するヘルパー
+// Microsoft Foundry の Grok は v1 chat completions 構文で呼び出し可能
+export const isGrokModel = (deploymentName?: string): boolean => {
+  if (!deploymentName) return false;
+  const name = deploymentName.toLowerCase();
+  return name.includes('grok');
+};
+
+// DeepSeek モデルかどうかを判定するヘルパー
+export const isDeepSeekModel = (deploymentName?: string): boolean => {
+  if (!deploymentName) return false;
+  const name = deploymentName.toLowerCase();
+  return name.includes('deepseek') || name.includes('mai-ds');
 };
 
 // Microsoft Graph / Outlook Calendar 連携

@@ -61,10 +61,10 @@ export const useStore = create<AppState>()(
         azureEndpoint: '',
         azureApiKey: '',
         azureDeploymentName: '',
-        azureApiVersion: '2025-04-01-preview',
+        azureApiVersion: 'v1',
         // Google Gemini
         geminiApiKey: '',
-        geminiModel: 'gemini-2.0-flash-exp',
+        geminiModel: 'gemini-2.0-flash',
         // Agent settings
         enableAgent: true,
         // Search settings
