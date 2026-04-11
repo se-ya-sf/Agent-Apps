@@ -8,6 +8,9 @@ import {
   ExperienceLog,
   TeamsWebhookConfig,
   ProposalNotification,
+  KnowledgeEntry,
+  KnowledgeCategory,
+  ADMIN_USERS,
   DEFAULT_MEMBERS,
   DEFAULT_PREFERENCES,
   WinePreference,
@@ -20,6 +23,7 @@ interface ClubStoreState {
   members: ClubMember[];
   preferences: UserPreferences[];
   experienceLogs: ExperienceLog[];
+  knowledgeEntries: KnowledgeEntry[];
   teamsWebhook: TeamsWebhookConfig;
   notifications: ProposalNotification[];
 
@@ -53,6 +57,16 @@ interface ClubStoreState {
   addNotification: (notification: Omit<ProposalNotification, 'id'>) => string;
   updateNotification: (id: string, updates: Partial<ProposalNotification>) => void;
 
+  // Knowledge Actions (管理者ナレッジ)
+  addKnowledge: (entry: Omit<KnowledgeEntry, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateKnowledge: (id: string, updates: Partial<KnowledgeEntry>) => void;
+  deleteKnowledge: (id: string) => void;
+  getKnowledge: (id: string) => KnowledgeEntry | undefined;
+  getKnowledgeByCategory: (category: KnowledgeCategory) => KnowledgeEntry[];
+  getKnowledgeByAuthor: (authorId: string) => KnowledgeEntry[];
+  searchKnowledge: (query: string) => KnowledgeEntry[];
+  getKnowledgeForAI: (query: string) => string;
+
   // Summary / Query
   getMemberSummary: (memberId: string) => string;
   getAllMembersSummary: () => string;
@@ -66,6 +80,7 @@ export const useClubStore = create<ClubStoreState>()(
       members: DEFAULT_MEMBERS,
       preferences: DEFAULT_PREFERENCES,
       experienceLogs: [],
+      knowledgeEntries: [],
       teamsWebhook: { webhookUrl: '', enabled: false },
       notifications: [],
       selectedMemberId: null,
@@ -267,6 +282,103 @@ export const useClubStore = create<ClubStoreState>()(
         }));
       },
 
+      // ============ Knowledge Actions ============
+      addKnowledge: (entry) => {
+        const id = generateId();
+        const now = new Date().toISOString();
+        const newEntry = { ...entry, id, createdAt: now, updatedAt: now } as KnowledgeEntry;
+        set((state) => ({
+          knowledgeEntries: [newEntry, ...state.knowledgeEntries],
+        }));
+        return id;
+      },
+
+      updateKnowledge: (id, updates) => {
+        set((state) => ({
+          knowledgeEntries: state.knowledgeEntries.map((e) =>
+            e.id === id ? { ...e, ...updates, updatedAt: new Date().toISOString() } as KnowledgeEntry : e
+          ),
+        }));
+      },
+
+      deleteKnowledge: (id) => {
+        set((state) => ({
+          knowledgeEntries: state.knowledgeEntries.filter((e) => e.id !== id),
+        }));
+      },
+
+      getKnowledge: (id) => {
+        return get().knowledgeEntries.find((e) => e.id === id);
+      },
+
+      getKnowledgeByCategory: (category) => {
+        return get().knowledgeEntries.filter((e) => e.category === category);
+      },
+
+      getKnowledgeByAuthor: (authorId) => {
+        return get().knowledgeEntries.filter((e) => e.authorId === authorId);
+      },
+
+      searchKnowledge: (query) => {
+        const q = query.toLowerCase();
+        return get().knowledgeEntries.filter((e) => {
+          const searchFields: string[] = [];
+          if ('shopName' in e) searchFields.push(e.shopName);
+          if ('targetName' in e) searchFields.push(e.targetName);
+          if ('title' in e) searchFields.push(e.title);
+          if ('content' in e) searchFields.push(e.content);
+          if ('description' in e && e.description) searchFields.push(e.description);
+          if ('authorComment' in e && e.authorComment) searchFields.push(e.authorComment);
+          if ('menu' in e && e.menu) searchFields.push(...e.menu);
+          if (e.tags) searchFields.push(...e.tags);
+          if ('area' in e && e.area) searchFields.push(e.area);
+          if ('genre' in e && e.genre) searchFields.push(e.genre);
+          return searchFields.some((f) => f.toLowerCase().includes(q));
+        });
+      },
+
+      // AI向けナレッジ検索結果をフォーマット（引用コメント付き）
+      getKnowledgeForAI: (query) => {
+        const results = get().searchKnowledge(query);
+        if (results.length === 0) return '';
+
+        const getAuthorName = (authorId: string) => {
+          const admin = ADMIN_USERS.find((a) => a.id === authorId);
+          if (admin) return admin.displayName;
+          const member = get().members.find((m) => m.id === authorId);
+          return member?.displayName || authorId;
+        };
+
+        return results.map((entry, i) => {
+          const authorName = getAuthorName(entry.authorId);
+          let text = `[ナレッジ${i + 1}] `;
+
+          if (entry.category === 'shop' && 'shopName' in entry) {
+            text += `【店舗】${entry.shopName}`;
+            if (entry.area) text += ` (${entry.area})`;
+            if (entry.genre) text += ` [${entry.genre}]`;
+            if (entry.access) text += `\nアクセス: ${entry.access}`;
+            if (entry.menu?.length) text += `\nおすすめ: ${entry.menu.join(', ')}`;
+            if (entry.priceRange) text += `\n価格帯: ${entry.priceRange}`;
+            if (entry.description) text += `\n${entry.description}`;
+          } else if (entry.category === 'review' && 'targetName' in entry) {
+            text += `【レビュー】${entry.targetName}`;
+            if (entry.rating) text += ` ★${entry.rating}`;
+          } else if ('title' in entry) {
+            text += `【${entry.category === 'tips' ? '知識' : entry.category}】${entry.title}`;
+            if ('content' in entry) text += `\n${entry.content}`;
+          }
+
+          // 有識者コメント（引用スタイルで表示させるためのマーク）
+          if (entry.authorComment) {
+            text += `\n💬 ${authorName}のコメント: 「${entry.authorComment}」`;
+          }
+          text += `\n(登録者: ${authorName})`;
+
+          return text;
+        }).join('\n\n');
+      },
+
       // ============ Summary / Query ============
       getMemberSummary: (memberId) => {
         const state = get();
@@ -350,11 +462,12 @@ export const useClubStore = create<ClubStoreState>()(
       },
     }),
     {
-      name: 'wine-beer-club-storage-v1',
+      name: 'wine-beer-club-storage-v2',
       partialize: (state) => ({
         members: state.members,
         preferences: state.preferences,
         experienceLogs: state.experienceLogs,
+        knowledgeEntries: state.knowledgeEntries,
         teamsWebhook: state.teamsWebhook,
         notifications: state.notifications,
       }),
