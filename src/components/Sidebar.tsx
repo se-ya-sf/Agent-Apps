@@ -35,7 +35,7 @@ export default function Sidebar() {
     togglePinChat,
   } = useStore();
 
-  const { members, experienceLogs } = useClubStore();
+  const { members, experienceLogs, knowledgeEntries } = useClubStore();
 
   // ピン留めされたチャットを上に表示
   const sortedChats = [...chats].sort((a, b) => {
@@ -247,6 +247,14 @@ export default function Sidebar() {
             <BookOpen className="w-5 h-5" />
             <span className="text-sm font-medium">体験ログ</span>
             <span className="ml-auto text-xs bg-purple-700/50 px-2 py-0.5 rounded-full">{experienceLogs.length}</span>
+          </Link>
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-3 py-2.5 text-amber-300 hover:text-white hover:bg-amber-700/30 rounded-xl transition-all"
+          >
+            <Database className="w-5 h-5" />
+            <span className="text-sm font-medium">管理者ナレッジ</span>
+            <span className="ml-auto text-xs bg-amber-700/50 px-2 py-0.5 rounded-full">{knowledgeEntries.length}</span>
           </Link>
         </div>
 

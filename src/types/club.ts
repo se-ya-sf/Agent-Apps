@@ -98,6 +98,87 @@ export interface ProposalNotification {
 }
 
 // ============================================
+// 管理者ナレッジ (Admin Knowledge)
+// せーや・草野さん専用：自由登録→AIが引用して回答
+// ============================================
+
+export type KnowledgeCategory = 'shop' | 'review' | 'tips' | 'event' | 'other';
+
+// 店舗情報ナレッジ
+export interface ShopKnowledge {
+  id: string;
+  category: 'shop';
+  shopName: string;
+  area?: string;             // エリア (渋谷、新宿、etc)
+  genre?: string;            // ジャンル (ビアバー、ワインバー、etc)
+  access?: string;           // アクセス情報
+  menu?: string[];           // おすすめメニュー
+  priceRange?: string;       // 価格帯
+  description?: string;      // 店舗説明
+  authorId: string;          // 登録者 (seiya, kusano)
+  authorComment?: string;    // 有識者の一言コメント（引用表示用）
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// レビュー/コメント型ナレッジ
+export interface ReviewKnowledge {
+  id: string;
+  category: 'review';
+  targetName: string;        // 対象（店名、銘柄名、etc）
+  targetType?: string;       // wine, beer, shop, etc
+  rating?: number;           // 1-5
+  authorId: string;
+  authorComment: string;     // 有識者の実コメント（引用表示用）
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 知識・Tips型ナレッジ
+export interface TipsKnowledge {
+  id: string;
+  category: 'tips';
+  title: string;
+  content: string;           // 知識本文
+  authorId: string;
+  authorComment?: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 汎用ナレッジ
+export interface GeneralKnowledge {
+  id: string;
+  category: KnowledgeCategory;
+  title: string;
+  content: string;
+  authorId: string;
+  authorComment?: string;
+  tags?: string[];
+  metadata?: Record<string, unknown>; // 自由拡張
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ナレッジ統合型
+export type KnowledgeEntry = ShopKnowledge | ReviewKnowledge | TipsKnowledge | GeneralKnowledge;
+
+// 管理者ユーザー定義
+export interface AdminUser {
+  id: string;
+  displayName: string;
+  role: 'admin';
+}
+
+export const ADMIN_USERS: AdminUser[] = [
+  { id: 'seiya', displayName: 'せーや', role: 'admin' },
+  { id: 'kusano', displayName: '草野', role: 'admin' },
+];
+
+// ============================================
 // Club Store State
 // ============================================
 
@@ -105,6 +186,7 @@ export interface ClubState {
   members: ClubMember[];
   preferences: UserPreferences[];
   experienceLogs: ExperienceLog[];
+  knowledgeEntries: KnowledgeEntry[];
   teamsWebhook: TeamsWebhookConfig;
   notifications: ProposalNotification[];
 }
@@ -132,16 +214,16 @@ export interface SaveExperienceLogArgs {
 // デフォルトメンバー
 export const DEFAULT_MEMBERS: ClubMember[] = [
   {
-    id: 'user-a',
-    name: 'User A',
-    displayName: 'User A',
+    id: 'kusano',
+    name: 'Kusano',
+    displayName: '草野',
     avatarColor: 'from-blue-500 to-cyan-500',
     createdAt: new Date().toISOString(),
   },
   {
     id: 'seiya',
     name: 'Seiya',
-    displayName: 'Seiya',
+    displayName: 'せーや',
     avatarColor: 'from-orange-500 to-red-500',
     createdAt: new Date().toISOString(),
   },
@@ -149,7 +231,7 @@ export const DEFAULT_MEMBERS: ClubMember[] = [
 
 export const DEFAULT_PREFERENCES: UserPreferences[] = [
   {
-    memberId: 'user-a',
+    memberId: 'kusano',
     wine: {},
     beer: {},
     other: {},

@@ -331,6 +331,9 @@ export interface ClubStoreForTools {
   getMemberSummary: (memberId: string) => string;
   getAllMembersSummary: () => string;
   teamsWebhook: { webhookUrl: string; enabled: boolean };
+  // Knowledge (RAG) methods
+  searchKnowledge?: (query: string) => Array<Record<string, unknown>>;
+  getKnowledgeForAI?: (query: string) => string;
 }
 
 // Tool execution context（Outlook等の追加コンテキスト）

@@ -6,6 +6,32 @@ import { ToolDefinition } from '@/types';
 
 export const CLUB_TOOLS: ToolDefinition[] = [
   {
+    name: 'club_search_knowledge',
+    description: `管理者（せーや・草野）が登録したナレッジ（店舗情報、レビュー、知識Tips）を検索します。
+ユーザーの質問に関連する店舗・ワイン・ビール情報を回答する際に使用してください。
+有識者の実コメントが含まれる場合は、必ず引用スタイル（> ）で表示してください。
+キーワードで店名、銘柄名、エリア、ジャンル、タグなどを横断検索します。`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '検索キーワード（店名、銘柄名、エリア、カテゴリ、タグなど）',
+        },
+        category: {
+          type: 'string',
+          description: 'カテゴリフィルタ（任意）: "shop", "review", "tips", "event", "other"',
+          enum: ['shop', 'review', 'tips', 'event', 'other'],
+        },
+        authorId: {
+          type: 'string',
+          description: '登録者フィルタ（任意）: "seiya" または "kusano"',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'club_save_preference',
     description: `ユーザーのワイン・ビールの好み情報を登録・更新します。
 ユーザーが「〇〇が好き」「〇〇は苦手」などと言った時に使用してください。
@@ -198,6 +224,9 @@ export async function executeClubTool(
     getMemberSummary: (memberId: string) => string;
     getAllMembersSummary: () => string;
     teamsWebhook: { webhookUrl: string; enabled: boolean };
+    // Knowledge (RAG) methods
+    searchKnowledge?: (query: string) => Array<Record<string, unknown>>;
+    getKnowledgeForAI?: (query: string) => string;
   }
 ): Promise<string> {
   switch (toolName) {
@@ -393,6 +422,69 @@ export async function executeClubTool(
           error: `Teams通知エラー: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
       }
+    }
+
+    case 'club_search_knowledge': {
+      const query = args.query as string;
+      const category = args.category as string | undefined;
+      const authorIdFilter = args.authorId as string | undefined;
+      
+      if (!clubStore.searchKnowledge) {
+        return JSON.stringify({ error: 'ナレッジ検索機能が利用できません。' });
+      }
+      
+      // keyword search
+      let results = clubStore.searchKnowledge(query);
+      
+      // optional filters
+      if (category) {
+        results = results.filter((e: Record<string, unknown>) => e.category === category);
+      }
+      if (authorIdFilter) {
+        results = results.filter((e: Record<string, unknown>) => e.authorId === authorIdFilter);
+      }
+      
+      if (results.length === 0) {
+        return JSON.stringify({
+          message: `「${query}」に一致するナレッジは見つかりませんでした。`,
+          count: 0,
+          results: [],
+        });
+      }
+      
+      // Format for AI with quote-style author comments
+      const formatted = clubStore.getKnowledgeForAI?.(query) || '';
+      
+      return JSON.stringify({
+        count: results.length,
+        formattedForAI: formatted,
+        results: results.map((entry: Record<string, unknown>) => {
+          const base: Record<string, unknown> = {
+            id: entry.id,
+            category: entry.category,
+            authorId: entry.authorId,
+            authorComment: entry.authorComment || null,
+            tags: entry.tags || [],
+          };
+          if (entry.category === 'shop') {
+            base.shopName = entry.shopName;
+            base.area = entry.area;
+            base.genre = entry.genre;
+            base.access = entry.access;
+            base.menu = entry.menu;
+            base.priceRange = entry.priceRange;
+            base.description = entry.description;
+          } else if (entry.category === 'review') {
+            base.targetName = entry.targetName;
+            base.targetType = entry.targetType;
+            base.rating = entry.rating;
+          } else {
+            base.title = entry.title;
+            base.content = entry.content;
+          }
+          return base;
+        }),
+      });
     }
 
     default:
